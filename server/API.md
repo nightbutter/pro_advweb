@@ -2,7 +2,7 @@
 
 Base URL
 - Local: `http://localhost:3000/api`
-- Production (Vercel): `https://pro-advweb-ef39.vercel.app/api`
+- Production (Vercel): `https://backend-pro-advweb.vercel.app/api`
 
 ทุกเส้นรับ/ส่ง JSON (`Content-Type: application/json`)
 Error ทุกเส้นมีรูปแบบ `{ "error": "ข้อความ" }` พร้อม status 400 / 404 / 500
@@ -294,7 +294,7 @@ vercel --prod   # deploy ขึ้น production
 
 ### เชื่อม Frontend กับ Backend ที่ deploy แล้ว
 Frontend อ่าน URL ของ API จาก environment file:
-- `client/src/environments/environment.ts` — production (`ng build`) ชี้ไปที่ `https://pro-advweb-ef39.vercel.app/api`
+- `client/src/environments/environment.ts` — production (`ng build`) ชี้ไปที่ `https://backend-pro-advweb.vercel.app/api`
 - `client/src/environments/environment.development.ts` — ใช้ตอน `ng serve` / `ng build --configuration development` ชี้ไปที่ `http://localhost:3000/api`
 
 ถ้า backend ย้าย URL ให้แก้ `apiUrl` ใน `environment.ts` เท่านั้น ไม่ต้องแก้ service
