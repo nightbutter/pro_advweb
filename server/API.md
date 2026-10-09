@@ -2,7 +2,7 @@
 
 Base URL
 - Local: `http://localhost:3000/api`
-- Vercel: `https://<project-name>.vercel.app/api`
+- Production (Vercel): `https://pro-advweb-ef39.vercel.app/api`
 
 ทุกเส้นรับ/ส่ง JSON (`Content-Type: application/json`)
 Error ทุกเส้นมีรูปแบบ `{ "error": "ข้อความ" }` พร้อม status 400 / 404 / 500
@@ -259,10 +259,17 @@ vercel --prod   # deploy ขึ้น production
 ทดสอบในเครื่องแบบเดียวกับบน Vercel ได้ด้วย `vercel dev`
 
 ### เชื่อม Frontend กับ Backend ที่ deploy แล้ว
-แก้ `baseUrl` ใน `client/src/app/services/api.service.ts`
-```ts
-private baseUrl = 'https://<project-name>.vercel.app/api';
-```
+Frontend อ่าน URL ของ API จาก environment file:
+- `client/src/environments/environment.ts` — production (`ng build`) ชี้ไปที่ `https://pro-advweb-ef39.vercel.app/api`
+- `client/src/environments/environment.development.ts` — ใช้ตอน `ng serve` / `ng build --configuration development` ชี้ไปที่ `http://localhost:3000/api`
+
+ถ้า backend ย้าย URL ให้แก้ `apiUrl` ใน `environment.ts` เท่านั้น ไม่ต้องแก้ service
+
+CORS ของ backend อนุญาตเฉพาะ `https://pro-advweb.vercel.app` (+ preview deployments `pro-advweb-*.vercel.app`) และ `http://localhost:4200` ถ้าเปลี่ยน domain frontend ให้เพิ่ม origin ใน `server/src/index.ts` หรือตั้งค่า env `FRONTEND_URL` บน Vercel
+
+### ข้อมูลที่เก็บบน Vercel ไม่ถาวร
+- SQLite บน Vercel ถูกเขียนลง `/tmp/database.sqlite` เท่านั้น — ทุก deployment และ cold start จะเริ่มจากฐานข้อมูลใหม่ที่ถูก seed อัตโนมัติ (เช็คได้จาก `GET /api/health` → `"storage": "ephemeral"`)
+- ถ้าต้องการเก็บข้อมูลจริงถาวร ให้ย้ายไปฐานข้อมูลภายนอก เช่น Turso (`@libsql/client` — API คล้าย SQLite มาก แก้เฉพาะ `src/database/connection.ts`), Neon/Supabase (Postgres) แล้วตั้งค่า connection string เป็น Vercel Environment Variable เช่น `DATABASE_URL` / `TURSO_AUTH_TOKEN` — ห้าม hardcode credentials ในโค้ด
 
 ### ถ้า deploy ไม่ผ่าน
 - `better-sqlite3` ต้อง compile สำหรับ Linux ตอน build บน Vercel ถ้า build log ขึ้น error เกี่ยวกับ `better-sqlite3` / `node-gyp` ให้ตั้ง Node.js Version เป็น 22.x ใน Project Settings → Build and Deployment

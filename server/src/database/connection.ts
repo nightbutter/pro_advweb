@@ -1,10 +1,21 @@
 import Database from 'better-sqlite3';
+import os from 'os';
 import path from 'path';
 
-// Vercel's filesystem is read-only except /tmp (data resets when the function restarts)
-const dbPath = process.env.VERCEL
-  ? '/tmp/database.sqlite'
+// Vercel's filesystem is read-only except the temp dir (data resets when the function restarts)
+const isVercel = !!process.env.VERCEL;
+const dbPath = isVercel
+  ? path.join(os.tmpdir(), 'database.sqlite')
   : path.resolve(__dirname, '../../database.sqlite');
+
+if (isVercel) {
+  console.warn(
+    'WARNING: Running on Vercel — SQLite data is stored in the function temp directory and is ' +
+    'ephemeral (resets on deployment and cold start). Configure a persistent database ' +
+    '(e.g. Turso, Postgres) for production data.'
+  );
+}
+
 export const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
