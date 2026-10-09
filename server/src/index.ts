@@ -27,7 +27,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin)) {
       return callback(null, true);
     }
-    callback(new Error('Not allowed by CORS'));
+    callback(null, false); // no CORS headers -> browsers reject the response
   }
 }));
 app.use(express.json());
@@ -48,6 +48,22 @@ app.get('/api/health', (req, res) => {
     // Vercel serverless can only write to /tmp — the SQLite file is not persistent.
     storage: process.env.VERCEL ? 'ephemeral' : 'file'
   });
+});
+
+// JSON 404 for unmatched API routes (keeps the {error} contract; no HTML error pages)
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.originalUrl}` });
+});
+
+// JSON error handler — malformed JSON bodies and unexpected errors.
+// Never leak stack traces or internal paths to clients.
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message =
+    status === 400 ? 'Malformed request body'
+    : status < 500 ? (err.message || 'Bad request')
+    : 'Internal server error';
+  res.status(status).json({ error: message });
 });
 
 // On Vercel the exported app is used as a serverless function, so only listen locally

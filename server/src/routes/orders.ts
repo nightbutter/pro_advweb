@@ -178,7 +178,16 @@ orderRouter.delete('/:id', (req, res) => {
 // GENERATE SIMULATED ORDERS (จำลองออเดอร์มื้อเที่ยง 25 - 35 รายการ)
 orderRouter.post('/simulate', (req, res) => {
   try {
-    const count = Number(req.body.count) || 28; // Default 28 orders for lunch rush
+    // count is optional (default 28); must be a positive integer when provided.
+    // An invalid value must never wipe existing orders.
+    let count = 28;
+    if (req.body?.count !== undefined) {
+      const n = Number(req.body.count);
+      if (!Number.isInteger(n) || n < 1 || n > 500) {
+        return res.status(400).json({ error: 'count must be an integer between 1 and 500' });
+      }
+      count = n;
+    }
     const customers = db.prepare('SELECT id FROM customers').all() as { id: number }[];
 
     if (customers.length === 0) {

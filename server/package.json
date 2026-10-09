@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test",
     "start": "ts-node-dev --transpile-only src/index.ts",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
   },
