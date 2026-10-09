@@ -18,17 +18,20 @@ Error ทุกเส้นมีรูปแบบ `{ "error": "ข้อคว
 | 4 | POST | `/api/customers` | เพิ่มลูกค้า |
 | 5 | PUT | `/api/customers/:id` | แก้ไขลูกค้า |
 | 6 | DELETE | `/api/customers/:id` | ลบลูกค้า (ลบออเดอร์ของลูกค้าด้วย) |
-| 7 | GET | `/api/orders` | ออเดอร์ทั้งหมด |
-| 8 | POST | `/api/orders` | เพิ่มออเดอร์ |
-| 9 | PUT | `/api/orders/:id` | แก้ไขออเดอร์ |
-| 10 | DELETE | `/api/orders/:id` | ลบออเดอร์ 1 รายการ |
-| 11 | DELETE | `/api/orders` | ลบออเดอร์ทั้งหมด |
-| 12 | POST | `/api/orders/simulate` | จำลองออเดอร์มื้อเที่ยง |
-| 13 | GET | `/api/riders` | ไรเดอร์ทั้งหมด (13 คน) |
-| 14 | GET | `/api/riders/:idOrCode` | ไรเดอร์ 1 คน |
-| 15 | POST | `/api/routes/optimize` | คำนวณเส้นทางใหม่ |
-| 16 | GET | `/api/routes/current` | แผนเส้นทางล่าสุด |
-| 17 | GET | `/api/routes/rider/:jobCodeOrId` | ใบงานของไรเดอร์ 1 คน |
+| 7 | GET | `/api/customers/search?q=` | ค้นหาลูกค้าจากบางส่วนของชื่อ |
+| 8 | GET | `/api/customers/nearby?lat=&lng=` | ลูกค้าในรัศมี 1 กม. |
+| 9 | GET | `/api/orders` | ออเดอร์ทั้งหมด |
+| 10 | GET | `/api/orders/nearby?lat=&lng=` | ออเดอร์ในรัศมี 2 กม. |
+| 11 | POST | `/api/orders` | เพิ่มออเดอร์ |
+| 12 | PUT | `/api/orders/:id` | แก้ไขออเดอร์ |
+| 13 | DELETE | `/api/orders/:id` | ลบออเดอร์ 1 รายการ |
+| 14 | DELETE | `/api/orders` | ลบออเดอร์ทั้งหมด |
+| 15 | POST | `/api/orders/simulate` | จำลองออเดอร์มื้อเที่ยง |
+| 16 | GET | `/api/riders` | ไรเดอร์ทั้งหมด (13 คน) |
+| 17 | GET | `/api/riders/:idOrCode` | ไรเดอร์ 1 คน |
+| 18 | POST | `/api/routes/optimize` | คำนวณเส้นทางใหม่ |
+| 19 | GET | `/api/routes/current` | แผนเส้นทางล่าสุด |
+| 20 | GET | `/api/routes/rider/:jobCodeOrId` | ใบงานของไรเดอร์ 1 คน |
 
 ---
 
@@ -71,6 +74,27 @@ Body เหมือน POST ต้องส่งครบทุกฟิลด
 { "success": true, "message": "Customer deleted" }
 ```
 
+### GET `/api/customers/search?q=<ข้อความ>`
+ค้นหาลูกค้าจาก **บางส่วนของชื่อ** (column `name` เก็บชื่อเต็ม ดังนั้นจับคู่ได้ทั้งชื่อและนามสกุล)
+- `q` บังคับ ถ้าขาดหรือว่าง → `400`
+- ตัวอักษร `%`, `_`, `\` ใน q ถูก escape เป็น literal
+- คืน array ของลูกค้า (รูปแบบเดียวกับ GET /api/customers) เรียง id จากใหม่ไปเก่า
+
+```bash
+curl "http://localhost:3000/api/customers/search?q=สมชาย"
+```
+
+### GET `/api/customers/nearby?lat=<ละติจูด>&lng=<ลองจิจูด>[&radius=<เมตร>]`
+ค้นหาลูกค้าในรัศมี **1 กิโลเมตร** (ค่าเริ่มต้น `radius=1000` เมตร) จากพิกัดที่ระบุ
+- `lat`, `lng` บังคับ ต้องเป็นตัวเลข lat ∈ [-90,90], lng ∈ [-180,180] ถ้าขาด/ไม่ถูกต้อง → `400`
+- `radius` ไม่บังคับ หน่วยเป็นเมตร ต้อง > 0 ถ้าไม่ถูกต้อง → `400`
+- ระยะทางคำนวณด้วยสูตร Haversine (รัศมีโลก 6,371,000 ม.) เทียบแบบ `ระยะ <= radius` (รวมขอบเขตพอดี)
+- ลูกค้าที่ไม่มีพิกัดที่ถูกต้องจะถูกข้าม
+
+```json
+{ "radiusMeters": 1000, "count": 22, "customers": [ { "id": 1, "name": "...", "lat": 16.2482, "lng": 103.2488, "distanceMeters": 132.1 } ] }
+```
+
 ---
 
 ## 3. Orders
@@ -98,11 +122,21 @@ Body เหมือน POST ต้องส่งครบทุกฟิลด
 ### GET `/api/orders`
 คืน array ของออเดอร์ทั้งหมด เรียง id จากน้อยไปมาก
 
+### GET `/api/orders/nearby?lat=<ละติจูด>&lng=<ลองจิจูด>[&radius=<เมตร>]`
+ค้นหาออเดอร์ในรัศมี **2 กิโลเมตร** (ค่าเริ่มต้น `radius=2000` เมตร) จากพิกัดที่ระบุ
+- พิกัดของออเดอร์ = พิกัดที่อยู่จัดส่งของลูกค้า (JOIN จากตาราง customers)
+- validation และรูปแบบผลลัพธ์เหมือน `/api/customers/nearby` แต่คืน `orders` พร้อมข้อมูลลูกค้าและ `distanceMeters`
+
+```json
+{ "radiusMeters": 2000, "count": 28, "orders": [ { "id": 1, "orderNumber": "ORD-LUNCH-001", "customerName": "...", "boxCount": 2, "lat": 16.2482, "lng": 103.2488, "distanceMeters": 132.1 } ] }
+```
+
 ### POST `/api/orders`
 ```json
 { "customerId": 1, "boxCount": 2 }
 ```
-- `boxCount` ต้องเป็น 1–3 ถ้าไม่ใช่ → `400`
+- `boxCount` ต้องเป็นจำนวนเต็ม 1–3 ถ้าไม่ใช่ → `400`
+- `customerId` ต้องอ้างถึงลูกค้าที่มีอยู่จริง ถ้าไม่พบ → `400 Customer not found`
 - server สร้าง `orderNumber`, `orderTime` (เวลาปัจจุบัน) และ `status = pending` ให้
 
 ตอบ `201` พร้อมออเดอร์ที่สร้าง
@@ -112,7 +146,7 @@ Body เหมือน POST ต้องส่งครบทุกฟิลด
 ```json
 { "boxCount": 3, "customerId": 2 }
 ```
-ถ้าไม่พบ → `404` ถ้า `boxCount` ไม่ใช่ 1–3 → `400`
+ถ้าไม่พบ → `404` ถ้า `boxCount` ไม่ใช่จำนวนเต็ม 1–3 → `400` ถ้า `customerId` ไม่มีอยู่จริง → `400`
 
 ### DELETE `/api/orders/:id`
 ```json

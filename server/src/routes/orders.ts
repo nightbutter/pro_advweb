@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { db } from '../database/connection';
 import { Order } from '../models/types';
+import { distanceMeters, parseLatLng } from '../services/geo';
 
 export const orderRouter = Router();
+
+const ORDER_NEARBY_RADIUS_M = 2000; // HW-5: orders within 2 km
 
 // GET all orders with customer details
 orderRouter.get('/', (req, res) => {
@@ -32,12 +35,67 @@ orderRouter.get('/', (req, res) => {
   }
 });
 
+// GET /nearby?lat=&lng=[&radius=] — orders within radius (default 2 km).
+// Order location is the customer's delivery coordinates (orders.lat/lng come from the customers join).
+// Radius is in meters; boundary is inclusive (distance <= radius).
+orderRouter.get('/nearby', (req, res) => {
+  try {
+    const origin = parseLatLng(req.query.lat, req.query.lng);
+    if (!origin) {
+      return res.status(400).json({ error: 'Valid lat and lng query parameters are required' });
+    }
+    let radius = ORDER_NEARBY_RADIUS_M;
+    if (req.query.radius !== undefined) {
+      const r = Number(req.query.radius);
+      if (!Number.isFinite(r) || r <= 0) {
+        return res.status(400).json({ error: 'radius must be a positive number (meters)' });
+      }
+      radius = r;
+    }
+
+    const orders = (db.prepare(`
+      SELECT
+        o.id,
+        o.orderNumber,
+        o.customerId,
+        o.boxCount,
+        o.orderTime,
+        o.status,
+        o.assignedRiderId,
+        o.deliverySequence,
+        c.name as customerName,
+        c.phone as customerPhone,
+        c.address as customerAddress,
+        c.lat,
+        c.lng
+      FROM orders o
+      JOIN customers c ON o.customerId = c.id
+    `).all() as Order[])
+      .filter(o => Number.isFinite(o.lat) && Number.isFinite(o.lng))
+      .map(o => ({ ...o, _d: distanceMeters(origin.lat, origin.lng, o.lat!, o.lng!) }))
+      .filter(o => o._d <= radius)
+      .map(({ _d, ...o }) => ({ ...o, distanceMeters: Number(_d.toFixed(1)) }))
+      .sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+    res.json({ radiusMeters: radius, count: orders.length, orders });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // CREATE single order
 orderRouter.post('/', (req, res) => {
   try {
     const { customerId, boxCount }: { customerId: number; boxCount: number } = req.body;
-    if (!customerId || !boxCount || boxCount < 1 || boxCount > 3) {
-      return res.status(400).json({ error: 'Valid customerId and boxCount (1-3) are required' });
+    if (!Number.isInteger(boxCount) || boxCount < 1 || boxCount > 3) {
+      return res.status(400).json({ error: 'boxCount must be an integer between 1 and 3' });
+    }
+    if (!Number.isInteger(customerId)) {
+      return res.status(400).json({ error: 'A valid customerId is required' });
+    }
+    const customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(customerId);
+    if (!customer) {
+      return res.status(400).json({ error: 'Customer not found' });
     }
 
     const countResult = db.prepare('SELECT COUNT(*) as count FROM orders').get() as { count: number };
@@ -66,13 +124,19 @@ orderRouter.post('/', (req, res) => {
 orderRouter.put('/:id', (req, res) => {
   try {
     const { boxCount, customerId }: { boxCount?: number; customerId?: number } = req.body;
-    if (boxCount !== undefined && (boxCount < 1 || boxCount > 3)) {
-      return res.status(400).json({ error: 'Box count must be between 1 and 3' });
+    if (boxCount !== undefined && (!Number.isInteger(boxCount) || boxCount < 1 || boxCount > 3)) {
+      return res.status(400).json({ error: 'boxCount must be an integer between 1 and 3' });
     }
 
     const currentOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
     if (!currentOrder) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+    if (customerId !== undefined) {
+      const customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(customerId);
+      if (!customer) {
+        return res.status(400).json({ error: 'Customer not found' });
+      }
     }
 
     const updatedBoxCount = boxCount !== undefined ? boxCount : currentOrder.boxCount;
