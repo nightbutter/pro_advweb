@@ -30,6 +30,9 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
             <a routerLink="/customers" routerLinkActive="active" class="nav-item">
               <span class="icon">👥</span> จัดการลูกค้า
             </a>
+            <a routerLink="/search" routerLinkActive="active" class="nav-item">
+              <span class="icon">📍</span> ค้นหาตามพิกัด
+            </a>
             <a routerLink="/rider" routerLinkActive="active" class="nav-item rider-btn">
               <span class="icon">📱</span> หน้าจอไรเดอร์ (มือถือ)
             </a>

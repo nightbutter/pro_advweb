@@ -23,6 +23,26 @@ export interface Order {
   deliverySequence?: number;
 }
 
+export interface CustomerNearby extends Customer {
+  distanceMeters: number;
+}
+
+export interface OrderNearby extends Order {
+  distanceMeters: number;
+}
+
+export interface NearbyCustomersResponse {
+  radiusMeters: number;
+  count: number;
+  customers: CustomerNearby[];
+}
+
+export interface NearbyOrdersResponse {
+  radiusMeters: number;
+  count: number;
+  orders: OrderNearby[];
+}
+
 export interface Rider {
   id: number;
   name: string;

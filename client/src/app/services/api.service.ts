@@ -1,7 +1,14 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Customer, Order, Rider, RouteOptimizationResult } from '../models/types';
+import {
+  Customer,
+  NearbyCustomersResponse,
+  NearbyOrdersResponse,
+  Order,
+  Rider,
+  RouteOptimizationResult
+} from '../models/types';
 import { environment } from '../../environments/environment';
 
 @Injectable({
@@ -56,6 +63,17 @@ export class ApiService {
 
   clearOrders(): Observable<{ success: boolean }> {
     return this.http.delete<{ success: boolean }>(`${this.baseUrl}/orders`);
+  }
+
+  // Geographic search (HW-5): backend applies the radius rules (1 km / 2 km)
+  getCustomersNearby(lat: number, lng: number): Observable<NearbyCustomersResponse> {
+    const params = new HttpParams().set('lat', lat).set('lng', lng);
+    return this.http.get<NearbyCustomersResponse>(`${this.baseUrl}/customers/nearby`, { params });
+  }
+
+  getOrdersNearby(lat: number, lng: number): Observable<NearbyOrdersResponse> {
+    const params = new HttpParams().set('lat', lat).set('lng', lng);
+    return this.http.get<NearbyOrdersResponse>(`${this.baseUrl}/orders/nearby`, { params });
   }
 
   // Riders
