@@ -1,3 +1,4 @@
+/// <reference types="jasmine" />
 import { parseCoordinates } from './coords';
 
 describe('parseCoordinates', () => {

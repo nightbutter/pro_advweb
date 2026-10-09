@@ -1,3 +1,4 @@
+/// <reference types="jasmine" />
 import { of, throwError } from 'rxjs';
 import { GeoSearchComponent } from './geo-search.component';
 import { ApiService } from '../../services/api.service';
