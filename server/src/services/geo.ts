@@ -43,3 +43,33 @@ export function parseLatLng(
   if (la < -90 || la > 90 || ln < -180 || ln > 180) return null;
   return { lat: la, lng: ln };
 }
+
+/** Whitelisted radius values accepted by /nearby endpoints, in kilometers. */
+export const ALLOWED_RADIUS_KM = [0.5, 1, 2, 3, 5, 10];
+
+/**
+ * Resolve the search radius in meters from query params.
+ * - `radiusKm` (km) takes priority and must be one of ALLOWED_RADIUS_KM -> else 400.
+ * - `radius` (meters, any positive number) is kept for backward compatibility.
+ * - Neither provided -> `defaultMeters`.
+ */
+export function resolveRadiusMeters(
+  query: { radiusKm?: unknown; radius?: unknown },
+  defaultMeters: number
+): { radiusMeters: number } | { error: string } {
+  if (query.radiusKm !== undefined) {
+    const km = Number(query.radiusKm);
+    if (!ALLOWED_RADIUS_KM.includes(km)) {
+      return { error: `radiusKm must be one of: ${ALLOWED_RADIUS_KM.join(', ')}` };
+    }
+    return { radiusMeters: km * 1000 };
+  }
+  if (query.radius !== undefined) {
+    const r = Number(query.radius);
+    if (!Number.isFinite(r) || r <= 0) {
+      return { error: 'radius must be a positive number (meters)' };
+    }
+    return { radiusMeters: r };
+  }
+  return { radiusMeters: defaultMeters };
+}

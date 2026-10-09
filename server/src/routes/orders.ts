@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../database/connection';
 import { Order } from '../models/types';
-import { distanceMeters, parseLatLng } from '../services/geo';
+import { distanceMeters, parseLatLng, resolveRadiusMeters } from '../services/geo';
 
 export const orderRouter = Router();
 
@@ -35,7 +35,7 @@ orderRouter.get('/', (req, res) => {
   }
 });
 
-// GET /nearby?lat=&lng=[&radius=] — orders within radius (default 2 km).
+// GET /nearby?lat=&lng=[&radiusKm=][&radius=] — orders within radius (default 2 km).
 // Order location is the customer's delivery coordinates (orders.lat/lng come from the customers join).
 // Radius is in meters; boundary is inclusive (distance <= radius).
 orderRouter.get('/nearby', (req, res) => {
@@ -44,14 +44,11 @@ orderRouter.get('/nearby', (req, res) => {
     if (!origin) {
       return res.status(400).json({ error: 'Valid lat and lng query parameters are required' });
     }
-    let radius = ORDER_NEARBY_RADIUS_M;
-    if (req.query.radius !== undefined) {
-      const r = Number(req.query.radius);
-      if (!Number.isFinite(r) || r <= 0) {
-        return res.status(400).json({ error: 'radius must be a positive number (meters)' });
-      }
-      radius = r;
+    const radiusResult = resolveRadiusMeters(req.query, ORDER_NEARBY_RADIUS_M);
+    if ('error' in radiusResult) {
+      return res.status(400).json({ error: radiusResult.error });
     }
+    const radius = radiusResult.radiusMeters;
 
     const orders = (db.prepare(`
       SELECT

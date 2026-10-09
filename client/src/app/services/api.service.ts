@@ -65,14 +65,16 @@ export class ApiService {
     return this.http.delete<{ success: boolean }>(`${this.baseUrl}/orders`);
   }
 
-  // Geographic search (HW-5): backend applies the radius rules (1 km / 2 km)
-  getCustomersNearby(lat: number, lng: number): Observable<NearbyCustomersResponse> {
-    const params = new HttpParams().set('lat', lat).set('lng', lng);
+  // Geographic search (HW-5): backend applies the radius filter (radiusKm is whitelisted server-side)
+  getCustomersNearby(lat: number, lng: number, radiusKm?: number): Observable<NearbyCustomersResponse> {
+    let params = new HttpParams().set('lat', lat).set('lng', lng);
+    if (radiusKm !== undefined) params = params.set('radiusKm', radiusKm);
     return this.http.get<NearbyCustomersResponse>(`${this.baseUrl}/customers/nearby`, { params });
   }
 
-  getOrdersNearby(lat: number, lng: number): Observable<NearbyOrdersResponse> {
-    const params = new HttpParams().set('lat', lat).set('lng', lng);
+  getOrdersNearby(lat: number, lng: number, radiusKm?: number): Observable<NearbyOrdersResponse> {
+    let params = new HttpParams().set('lat', lat).set('lng', lng);
+    if (radiusKm !== undefined) params = params.set('radiusKm', radiusKm);
     return this.http.get<NearbyOrdersResponse>(`${this.baseUrl}/orders/nearby`, { params });
   }
 

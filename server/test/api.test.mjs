@@ -59,6 +59,14 @@ test('customers/nearby: default 1km, validation, empty result', async () => {
   assert.ok(j.customers.every(c => c.distanceMeters <= 1000));
   assert.equal((await get('/customers/nearby?lat=999&lng=103')).status, 400);
   assert.equal((await get('/customers/nearby?lat=16.2&lng=103.2&radius=-1')).status, 400);
+  // radiusKm whitelist (HW-5 configurable radius)
+  for (const km of [0.5, 1, 2, 3, 5, 10]) {
+    const r = await get(`/customers/nearby?lat=16.2465&lng=103.2505&radiusKm=${km}`);
+    assert.equal(r.status, 200, `radiusKm=${km}`);
+    assert.equal((await r.json()).radiusMeters, km * 1000);
+  }
+  assert.equal((await get('/customers/nearby?lat=16.2465&lng=103.2505&radiusKm=7')).status, 400);
+  assert.equal((await get('/customers/nearby?lat=16.2465&lng=103.2505&radiusKm=abc')).status, 400);
   const far = await (await get('/customers/nearby?lat=0&lng=0')).json();
   assert.equal(far.count, 0);
 });
@@ -108,6 +116,23 @@ test('orders/nearby: default 2km via customer coords', async () => {
   assert.equal(j.radiusMeters, 2000);
   assert.ok(j.orders.every(o => o.distanceMeters <= 2000));
   assert.equal((await get('/orders/nearby?lat=16&lng=999')).status, 400);
+});
+
+test('orders/nearby: radiusKm whitelist and backward-compat meters param', async () => {
+  const km = await (await get('/orders/nearby?lat=16.2465&lng=103.2505&radiusKm=5')).json();
+  assert.equal(km.radiusMeters, 5000);
+  assert.ok(km.orders.every(o => o.distanceMeters <= 5000));
+  assert.equal((await get('/orders/nearby?lat=16.2465&lng=103.2505&radiusKm=4')).status, 400);
+  // legacy meters param still works
+  const m = await (await get('/orders/nearby?lat=16.2465&lng=103.2505&radius=1500')).json();
+  assert.equal(m.radiusMeters, 1500);
+});
+
+test('nearby: smaller radiusKm returns a subset of the default', async () => {
+  const small = await (await get('/customers/nearby?lat=16.2465&lng=103.2505&radiusKm=0.5')).json();
+  const big = await (await get('/customers/nearby?lat=16.2465&lng=103.2505&radiusKm=2')).json();
+  assert.ok(small.count <= big.count);
+  assert.ok(small.customers.every(c => c.distanceMeters <= 500));
 });
 
 test('orders/simulate rejects invalid count without wiping orders (regression: count=-5)', async () => {

@@ -9,6 +9,7 @@ import * as L from 'leaflet';
 interface SearchState<T> {
   lat: string;
   lng: string;
+  radiusKm: number;
   loading: boolean;
   error: string;
   searched: boolean;
@@ -17,6 +18,8 @@ interface SearchState<T> {
   results: T[];
   count: number;
 }
+
+const RADIUS_OPTIONS_KM = [0.5, 1, 2, 3, 5, 10];
 
 @Component({
   selector: 'app-geo-search',
@@ -30,10 +33,10 @@ interface SearchState<T> {
       </div>
 
       <div class="search-grid">
-        <!-- ==================== Customers within 1 km ==================== -->
+        <!-- ==================== Customers ==================== -->
         <div class="card">
           <div class="card-header">
-            <h3>👥 ค้นหาลูกค้าในรัศมี 1 กิโลเมตร</h3>
+            <h3>👥 ค้นหาลูกค้าตามพิกัด</h3>
           </div>
           <div class="coord-form">
             <div class="form-group">
@@ -44,20 +47,26 @@ interface SearchState<T> {
               <label>Longitude (ลองจิจูด) <span class="req">*</span></label>
               <input type="text" inputmode="decimal" [(ngModel)]="cust.lng" placeholder="เช่น 103.2505" />
             </div>
+            <div class="form-group radius-group">
+              <label>รัศมีค้นหาลูกค้า</label>
+              <select [(ngModel)]="cust.radiusKm">
+                <option *ngFor="let r of radiusOptions" [ngValue]="r">{{ r }} กิโลเมตร</option>
+              </select>
+            </div>
             <div class="form-actions">
               <button class="btn btn-secondary" type="button" (click)="useShopCoords('cust')">🏠 พิกัดร้าน</button>
               <button class="btn btn-primary" type="button" (click)="searchCustomers()" [disabled]="cust.loading">
-                {{ cust.loading ? '⏳ กำลังค้นหา...' : '🔍 ค้นหาลูกค้า (1 กม.)' }}
+                {{ cust.loading ? '⏳ กำลังค้นหา...' : '🔍 ค้นหาลูกค้า (' + cust.radiusKm + ' กม.)' }}
               </button>
             </div>
           </div>
 
           <div class="state-msg error" *ngIf="cust.error">⚠️ {{ cust.error }}</div>
           <div class="state-msg searched-info" *ngIf="cust.searched && cust.center">
-            📍 พิกัดที่ค้นหา: {{ cust.center.lat }}, {{ cust.center.lng }} — รัศมี 1 กม.
+            📍 พิกัดที่ค้นหา: {{ cust.center.lat }}, {{ cust.center.lng }} — รัศมี {{ cust.radiusMeters / 1000 }} กม.
           </div>
           <div class="state-msg empty" *ngIf="cust.searched && !cust.loading && !cust.error && cust.count === 0">
-            ไม่พบลูกค้าในรัศมี 1 กม. จากพิกัดนี้
+            ไม่พบลูกค้าในรัศมี {{ cust.radiusMeters / 1000 }} กม. จากพิกัดนี้
           </div>
           <div class="result-count" *ngIf="cust.count > 0">พบ {{ cust.count }} คน</div>
           <ul class="result-list" *ngIf="cust.count > 0">
@@ -73,10 +82,10 @@ interface SearchState<T> {
           </ul>
         </div>
 
-        <!-- ==================== Orders within 2 km ==================== -->
+        <!-- ==================== Orders ==================== -->
         <div class="card">
           <div class="card-header">
-            <h3>📦 ค้นหาออเดอร์ในรัศมี 2 กิโลเมตร</h3>
+            <h3>📦 ค้นหาออเดอร์ตามพิกัด</h3>
           </div>
           <div class="coord-form">
             <div class="form-group">
@@ -87,20 +96,26 @@ interface SearchState<T> {
               <label>Longitude (ลองจิจูด) <span class="req">*</span></label>
               <input type="text" inputmode="decimal" [(ngModel)]="ord.lng" placeholder="เช่น 103.2505" />
             </div>
+            <div class="form-group radius-group">
+              <label>รัศมีค้นหาออเดอร์</label>
+              <select [(ngModel)]="ord.radiusKm">
+                <option *ngFor="let r of radiusOptions" [ngValue]="r">{{ r }} กิโลเมตร</option>
+              </select>
+            </div>
             <div class="form-actions">
               <button class="btn btn-secondary" type="button" (click)="useShopCoords('ord')">🏠 พิกัดร้าน</button>
               <button class="btn btn-primary" type="button" (click)="searchOrders()" [disabled]="ord.loading">
-                {{ ord.loading ? '⏳ กำลังค้นหา...' : '🔍 ค้นหาออเดอร์ (2 กม.)' }}
+                {{ ord.loading ? '⏳ กำลังค้นหา...' : '🔍 ค้นหาออเดอร์ (' + ord.radiusKm + ' กม.)' }}
               </button>
             </div>
           </div>
 
           <div class="state-msg error" *ngIf="ord.error">⚠️ {{ ord.error }}</div>
           <div class="state-msg searched-info" *ngIf="ord.searched && ord.center">
-            📍 พิกัดที่ค้นหา: {{ ord.center.lat }}, {{ ord.center.lng }} — รัศมี 2 กม.
+            📍 พิกัดที่ค้นหา: {{ ord.center.lat }}, {{ ord.center.lng }} — รัศมี {{ ord.radiusMeters / 1000 }} กม.
           </div>
           <div class="state-msg empty" *ngIf="ord.searched && !ord.loading && !ord.error && ord.count === 0">
-            ไม่พบออเดอร์ในรัศมี 2 กม. จากพิกัดนี้
+            ไม่พบออเดอร์ในรัศมี {{ ord.radiusMeters / 1000 }} กม. จากพิกัดนี้
           </div>
           <div class="result-count" *ngIf="ord.count > 0">พบ {{ ord.count }} ออเดอร์</div>
           <ul class="result-list" *ngIf="ord.count > 0">
@@ -121,14 +136,14 @@ interface SearchState<T> {
       <div class="card map-card">
         <div class="card-header">
           <h3>🗺️ แผนที่ผลการค้นหา</h3>
-          <div class="legend" *ngIf="mapMode">
+          <div class="legend" *ngIf="cust.searched || ord.searched">
             <span class="legend-item"><span class="dot center-dot"></span> จุดค้นหา</span>
-            <span class="legend-item" *ngIf="mapMode === 'customers'"><span class="dot cust-dot"></span> ลูกค้า (1 กม.)</span>
-            <span class="legend-item" *ngIf="mapMode === 'orders'"><span class="dot ord-dot"></span> ออเดอร์ (2 กม.)</span>
+            <span class="legend-item" *ngIf="cust.searched"><span class="dot cust-dot"></span> ลูกค้า ({{ cust.radiusMeters / 1000 }} กม.)</span>
+            <span class="legend-item" *ngIf="ord.searched"><span class="dot ord-dot"></span> ออเดอร์ ({{ ord.radiusMeters / 1000 }} กม.)</span>
           </div>
         </div>
         <div id="geo-map" class="map-view"></div>
-        <p class="map-hint" *ngIf="!mapMode">ทำการค้นหาจากแผงด้านบนเพื่อแสดงจุดค้นหาและผลลัพธ์บนแผนที่</p>
+        <p class="map-hint" *ngIf="!cust.searched && !ord.searched">ทำการค้นหาจากแผงด้านบนเพื่อแสดงจุดค้นหาและผลลัพธ์บนแผนที่</p>
       </div>
     </div>
   `,
@@ -167,14 +182,18 @@ interface SearchState<T> {
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     .form-group label { font-size: 13px; font-weight: 600; color: #334155; }
     .req { color: #ef4444; }
-    .form-group input {
+    .form-group input,
+    .form-group select {
       padding: 9px 12px;
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       font-size: 14px;
       font-family: inherit;
+      background: #fff;
     }
-    .form-group input:focus { outline: 2px solid #fdba74; border-color: #f97316; }
+    .form-group input:focus,
+    .form-group select:focus { outline: 2px solid #fdba74; border-color: #f97316; }
+    .radius-group { grid-column: 1 / -1; }
     .form-actions {
       grid-column: 1 / -1;
       display: flex;
@@ -244,17 +263,18 @@ interface SearchState<T> {
   `]
 })
 export class GeoSearchComponent implements AfterViewInit, OnDestroy {
-  cust: SearchState<CustomerNearby> = this.newState(1000);
-  ord: SearchState<OrderNearby> = this.newState(2000);
+  readonly radiusOptions = RADIUS_OPTIONS_KM;
+  cust: SearchState<CustomerNearby> = this.newState(1);
+  ord: SearchState<OrderNearby> = this.newState(2);
 
   private map?: L.Map;
-  private searchLayer = L.layerGroup();
-  mapMode: 'customers' | 'orders' | null = null;
+  private custLayer = L.layerGroup();
+  private ordLayer = L.layerGroup();
 
   constructor(private api: ApiService) {}
 
-  private newState(radiusMeters: number): SearchState<any> {
-    return { lat: '', lng: '', loading: false, error: '', searched: false, center: null, radiusMeters, results: [], count: 0 };
+  private newState(radiusKm: number): SearchState<any> {
+    return { lat: '', lng: '', radiusKm, loading: false, error: '', searched: false, center: null, radiusMeters: radiusKm * 1000, results: [], count: 0 };
   }
 
   ngAfterViewInit() {
@@ -262,7 +282,8 @@ export class GeoSearchComponent implements AfterViewInit, OnDestroy {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
-    this.searchLayer.addTo(this.map);
+    this.custLayer.addTo(this.map);
+    this.ordLayer.addTo(this.map);
   }
 
   ngOnDestroy() {
@@ -284,14 +305,15 @@ export class GeoSearchComponent implements AfterViewInit, OnDestroy {
     const { lat, lng } = parsed.coords;
     this.cust.loading = true;
     this.cust.error = '';
-    this.api.getCustomersNearby(lat, lng).subscribe({
+    this.api.getCustomersNearby(lat, lng, this.cust.radiusKm).subscribe({
       next: res => {
         this.cust.results = res.customers;
         this.cust.count = res.count;
         this.cust.center = { lat, lng };
+        this.cust.radiusMeters = res.radiusMeters;
         this.cust.searched = true;
         this.cust.loading = false;
-        this.renderSearchOnMap('customers', lat, lng);
+        this.renderLayer(this.custLayer, 'customers', this.cust);
       },
       error: () => {
         this.cust.error = 'ค้นหาไม่สำเร็จ — ไม่สามารถติดต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่';
@@ -310,14 +332,15 @@ export class GeoSearchComponent implements AfterViewInit, OnDestroy {
     const { lat, lng } = parsed.coords;
     this.ord.loading = true;
     this.ord.error = '';
-    this.api.getOrdersNearby(lat, lng).subscribe({
+    this.api.getOrdersNearby(lat, lng, this.ord.radiusKm).subscribe({
       next: res => {
         this.ord.results = res.orders;
         this.ord.count = res.count;
         this.ord.center = { lat, lng };
+        this.ord.radiusMeters = res.radiusMeters;
         this.ord.searched = true;
         this.ord.loading = false;
-        this.renderSearchOnMap('orders', lat, lng);
+        this.renderLayer(this.ordLayer, 'orders', this.ord);
       },
       error: () => {
         this.ord.error = 'ค้นหาไม่สำเร็จ — ไม่สามารถติดต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่';
@@ -326,28 +349,31 @@ export class GeoSearchComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private renderSearchOnMap(mode: 'customers' | 'orders', lat: number, lng: number) {
-    if (!this.map) return;
-    this.mapMode = mode;
-    this.searchLayer.clearLayers();
+  private renderLayer(
+    layer: L.LayerGroup,
+    mode: 'customers' | 'orders',
+    state: SearchState<CustomerNearby | OrderNearby>
+  ) {
+    if (!this.map || !state.center) return;
+    layer.clearLayers();
 
-    const state = mode === 'customers' ? this.cust : this.ord;
+    const { lat, lng } = state.center;
+    const color = mode === 'customers' ? '#f97316' : '#0284c7';
 
     // Search center marker
     const centerIcon = L.divIcon({ html: '📍', className: 'geo-center-marker', iconSize: [30, 30], iconAnchor: [15, 30] });
     L.marker([lat, lng], { icon: centerIcon })
-      .addTo(this.searchLayer)
-      .bindPopup(`<b>จุดค้นหา</b><br>${lat}, ${lng}`);
+      .addTo(layer)
+      .bindPopup(`<b>จุดค้นหา${mode === 'customers' ? 'ลูกค้า' : 'ออเดอร์'}</b><br>${lat}, ${lng}`);
 
-    // Radius circle (1 km customers / 2 km orders)
+    // Radius circle (selected radius)
     L.circle([lat, lng], {
       radius: state.radiusMeters,
-      color: mode === 'customers' ? '#f97316' : '#0284c7',
+      color,
       weight: 2,
       fillOpacity: 0.05
-    }).addTo(this.searchLayer);
+    }).addTo(layer);
 
-    const color = mode === 'customers' ? '#f97316' : '#0284c7';
     for (const r of state.results) {
       if (r.lat == null || r.lng == null) continue;
       const label = mode === 'customers'
@@ -355,10 +381,17 @@ export class GeoSearchComponent implements AfterViewInit, OnDestroy {
         : `<b>${(r as OrderNearby).orderNumber}</b><br>${(r as OrderNearby).customerName} • 📦 ${(r as OrderNearby).boxCount} กล่อง<br>ระยะ ${r.distanceMeters} ม.`;
       L.circleMarker([r.lat, r.lng], {
         radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.85
-      }).addTo(this.searchLayer).bindPopup(label);
+      }).addTo(layer).bindPopup(label);
     }
 
-    const points: L.LatLngExpression[] = [[lat, lng], ...state.results.filter(r => r.lat != null && r.lng != null).map(r => [r.lat!, r.lng!] as L.LatLngExpression)];
-    this.map.fitBounds(L.latLngBounds(points).pad(0.15));
+    // Fit view to all active search results (both layers)
+    const points: L.LatLngExpression[] = [];
+    for (const s of [this.cust, this.ord]) {
+      if (s.center) points.push([s.center.lat, s.center.lng]);
+      for (const r of s.results) {
+        if (r.lat != null && r.lng != null) points.push([r.lat, r.lng]);
+      }
+    }
+    if (points.length) this.map.fitBounds(L.latLngBounds(points).pad(0.15));
   }
 }

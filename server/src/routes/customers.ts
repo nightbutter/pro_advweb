@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../database/connection';
 import { Customer } from '../models/types';
-import { distanceMeters, isFiniteNumber, parseLatLng } from '../services/geo';
+import { distanceMeters, isFiniteNumber, parseLatLng, resolveRadiusMeters } from '../services/geo';
 
 export const customerRouter = Router();
 
@@ -37,22 +37,20 @@ customerRouter.get('/search', (req, res) => {
   }
 });
 
-// GET /nearby?lat=&lng=[&radius=] — customers within radius (default 1 km)
-// Radius is in meters; boundary is inclusive (distance <= radius).
+// GET /nearby?lat=&lng=[&radiusKm=][&radius=] — customers within radius (default 1 km)
+// radiusKm: whitelisted kilometers (0.5,1,2,3,5,10) | radius: meters (any positive number)
+// Boundary is inclusive (distance <= radius).
 customerRouter.get('/nearby', (req, res) => {
   try {
     const origin = parseLatLng(req.query.lat, req.query.lng);
     if (!origin) {
       return res.status(400).json({ error: 'Valid lat and lng query parameters are required' });
     }
-    let radius = CUSTOMER_NEARBY_RADIUS_M;
-    if (req.query.radius !== undefined) {
-      const r = Number(req.query.radius);
-      if (!Number.isFinite(r) || r <= 0) {
-        return res.status(400).json({ error: 'radius must be a positive number (meters)' });
-      }
-      radius = r;
+    const radiusResult = resolveRadiusMeters(req.query, CUSTOMER_NEARBY_RADIUS_M);
+    if ('error' in radiusResult) {
+      return res.status(400).json({ error: radiusResult.error });
     }
+    const radius = radiusResult.radiusMeters;
 
     const customers = (db.prepare('SELECT * FROM customers').all() as Customer[])
       .filter(c => Number.isFinite(c.lat) && Number.isFinite(c.lng))

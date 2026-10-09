@@ -29,24 +29,51 @@ describe('GeoSearchComponent', () => {
     comp = new GeoSearchComponent(api); // no ngAfterViewInit -> no Leaflet/DOM needed
   });
 
-  it('runs a valid customer search (1 km) and stores results', () => {
+  it('runs a valid customer search with default 1 km radius', () => {
     comp.cust.lat = '16.2465';
     comp.cust.lng = '103.2505';
     comp.searchCustomers();
-    expect(api.getCustomersNearby).toHaveBeenCalledOnceWith(16.2465, 103.2505);
+    expect(comp.cust.radiusKm).toBe(1);
+    expect(api.getCustomersNearby).toHaveBeenCalledOnceWith(16.2465, 103.2505, 1);
     expect(comp.cust.count).toBe(2);
     expect(comp.cust.results.length).toBe(2);
     expect(comp.cust.searched).toBeTrue();
     expect(comp.cust.error).toBe('');
   });
 
-  it('runs a valid order search (2 km) and stores results', () => {
+  it('runs a valid order search with default 2 km radius', () => {
     comp.ord.lat = '16.2465';
     comp.ord.lng = '103.2505';
     comp.searchOrders();
-    expect(api.getOrdersNearby).toHaveBeenCalledOnceWith(16.2465, 103.2505);
+    expect(comp.ord.radiusKm).toBe(2);
+    expect(api.getOrdersNearby).toHaveBeenCalledOnceWith(16.2465, 103.2505, 2);
     expect(comp.ord.count).toBe(1);
     expect(comp.ord.results[0].boxCount).toBe(2);
+  });
+
+  it('passes every allowed customer radius to the API', () => {
+    comp.cust.lat = '16.2465'; comp.cust.lng = '103.2505';
+    for (const km of [0.5, 1, 2, 3, 5, 10]) {
+      comp.cust.radiusKm = km;
+      comp.searchCustomers();
+      expect(api.getCustomersNearby.calls.mostRecent().args).toEqual([16.2465, 103.2505, km]);
+    }
+  });
+
+  it('passes every allowed order radius to the API', () => {
+    comp.ord.lat = '16.2465'; comp.ord.lng = '103.2505';
+    for (const km of [0.5, 1, 2, 3, 5, 10]) {
+      comp.ord.radiusKm = km;
+      comp.searchOrders();
+      expect(api.getOrdersNearby.calls.mostRecent().args).toEqual([16.2465, 103.2505, km]);
+    }
+  });
+
+  it('radius selectors are independent', () => {
+    comp.cust.radiusKm = 5;
+    expect(comp.ord.radiusKm).toBe(2);
+    comp.ord.radiusKm = 10;
+    expect(comp.cust.radiusKm).toBe(5);
   });
 
   it('rejects empty inputs without calling the API', () => {
@@ -106,7 +133,7 @@ describe('GeoSearchComponent', () => {
     api.getCustomersNearby.and.returnValue(of({ radiusMeters: 1000, count: 0, customers: [] }));
     comp.searchCustomers();
     expect(api.getCustomersNearby).toHaveBeenCalledTimes(2);
-    expect(api.getCustomersNearby.calls.mostRecent().args).toEqual([0, 0]);
+    expect(api.getCustomersNearby.calls.mostRecent().args).toEqual([0, 0, 1]);
     expect(comp.cust.count).toBe(0);
   });
 
