@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "angular",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/frontend/browser",
+  "routes": [
+    {
+      "src": "^/api(?:/(.*))?$",
+      "dest": "${BACKEND_API_URL}/$1",
+      "env": ["BACKEND_API_URL"]
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/(.*)$",
+      "dest": "/index.html"
+    }
+  ]
+}

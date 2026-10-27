@@ -2,7 +2,9 @@
 
 Base URL
 - Local: `http://localhost:3000/api`
-- Vercel: `https://pro-advweb-ef39.vercel.app/api`
+- Frontend deployment: browser requests use the same-origin `/api` path. The Frontend Vercel project rewrites `/api/*` to the API base URL configured by its `BACKEND_API_URL` environment variable (the value must end in `/api`).
+- Vercel project layout: set the Backend project's Root Directory to `server`; the Express application is exported from `server.ts`. The deployment hostname and Preview/Production environment values must be verified in Vercel Project Settings before use; this repository does not establish a verified live Backend URL.
+- Configure the Backend's `CORS_ORIGINS` with the exact Frontend Production and Preview origins; do not use an unrestricted origin.
 
 ทุกเส้นรับ/ส่ง JSON (`Content-Type: application/json`)
 Error ทุกเส้นมีรูปแบบ `{ "error": "ข้อความ" }` พร้อม status 400 / 401 / 403 / 404 / 500 / 503

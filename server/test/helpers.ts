@@ -9,7 +9,9 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { Client } from 'pg';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 export const SERVER_DIR = path.resolve(__dirname, '..');
 const PG_PASSWORD = 'postgres';
@@ -27,13 +29,33 @@ const instances = new Map<string, Booted>();
 // knows the app's pg.Pool must be drained before the embedded server stops.
 let appImported = false;
 
+/** Ask the OS for a currently unused local TCP port. */
+async function allocatePort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    throw new Error('Could not allocate a local TCP port');
+  }
+  const { port } = address;
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => err ? reject(err) : resolve());
+  });
+  return port;
+}
+
 /** Start (once per process) a disposable embedded Postgres. */
-export async function bootPg(tag: string, port: number): Promise<Booted> {
+export async function bootPg(tag: string, _port: number): Promise<Booted> {
   const existing = instances.get(tag);
   if (existing) return existing;
 
-  const dir = path.join(SERVER_DIR, '.embedded-pg', tag);
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Never reuse or remove a directory left by an interrupted test run.
+  const dir = path.join(SERVER_DIR, '.embedded-pg', `${tag}-${process.pid}-${randomUUID()}`);
+  const port = await allocatePort();
 
   const pg = new EmbeddedPostgres({
     databaseDir: dir,
@@ -52,6 +74,13 @@ export async function bootPg(tag: string, port: number): Promise<Booted> {
     connectionString: `postgres://postgres:${PG_PASSWORD}@localhost:${port}/postgres`
   });
   await admin.connect();
+  const identity = await admin.query<{ data_directory: string }>('SHOW data_directory');
+  const normalizePath = (value: string) => path.resolve(value).replace(/\\/g, '/').toLowerCase();
+  if (normalizePath(identity.rows[0].data_directory) !== normalizePath(dir)) {
+    await admin.end();
+    await pg.stop();
+    throw new Error('Embedded PostgreSQL data directory did not match this test instance');
+  }
 
   const booted = { pg, admin, port, dir };
   instances.set(tag, booted);
@@ -100,7 +129,8 @@ export async function shutdownPg(tag: string): Promise<void> {
  * Point the app at `url` and import server.ts (which listens on `port`).
  * Must be called before ANY import of the app modules in this process.
  */
-export async function startApp(url: string, port: number): Promise<string> {
+export async function startApp(url: string, _port: number): Promise<string> {
+  const port = await allocatePort();
   process.env.DATABASE_URL = url;
   process.env.PORT = String(port);
   await import('../server');
