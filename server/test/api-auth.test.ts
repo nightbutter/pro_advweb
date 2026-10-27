@@ -56,6 +56,45 @@ test('POST /auth/login missing fields -> 400', async () => {
   assert.equal((await req(base, 'POST', '/auth/login', { username: 'admin' })).status, 400);
 });
 
+test('GET / displays only a configured non-development Frontend URL in production', async () => {
+  const previousFrontendUrl = process.env.FRONTEND_URL;
+  const previousVercel = process.env.VERCEL;
+  const rootUrl = `${base.replace(/\/api$/, '')}/`;
+
+  try {
+    process.env.VERCEL = '1';
+    process.env.FRONTEND_URL = 'https://frontend.example.test/path';
+    let response = await fetch(rootUrl);
+    let body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(body.message.includes('https://frontend.example.test'));
+    assert.doesNotMatch(body.message, /localhost|127\.0\.0\.1/);
+
+    process.env.FRONTEND_URL = 'http://localhost:4200';
+    response = await fetch(rootUrl);
+    body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(!body.message.includes('http://localhost:4200'));
+    assert.equal(body.health, '/api/health');
+
+    delete process.env.FRONTEND_URL;
+    response = await fetch(rootUrl);
+    body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(body.message.startsWith('Smart Rider Backend'));
+    assert.equal(body.health, '/api/health');
+
+    const health = await req(base, 'GET', '/health');
+    assert.equal(health.status, 200);
+    assert.equal(health.body.status, 'ok');
+  } finally {
+    if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = previousFrontendUrl;
+    if (previousVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = previousVercel;
+  }
+});
+
 test('customer registration stores profile details and creates a customer-only login', async () => {
   const registration = await req(base, 'POST', '/auth/register/customer', {
     name: 'ลูกค้าทดสอบ',
