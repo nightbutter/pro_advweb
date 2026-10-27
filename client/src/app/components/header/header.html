@@ -1,0 +1,48 @@
+<header class="top-nav">
+  <div class="nav-container">
+    <a class="brand" [routerLink]="auth.isLoggedIn() ? auth.homeRoute() : '/login'">
+      <span class="brand-mark">
+        <lucide-icon [img]="icons.utensils" [size]="20"></lucide-icon>
+      </span>
+      <span class="brand-text">
+        <span class="brand-title">ข้าวกล่องเดลิเวอรี่</span>
+        <span class="brand-subtitle">ส่งด่วนมื้อเที่ยง ม.มหาสารคาม · 11:30–12:30 น.</span>
+      </span>
+    </a>
+
+    <nav class="nav-links" *ngIf="auth.user() as user" aria-label="เมนูหลัก">
+      <ng-container *ngIf="auth.isAdmin()">
+        <a routerLink="/routes" routerLinkActive="active" class="nav-item">
+          <lucide-icon [img]="icons.route" [size]="17"></lucide-icon>
+          <span>จัดเส้นทาง</span>
+        </a>
+        <a routerLink="/orders" routerLinkActive="active" class="nav-item">
+          <lucide-icon [img]="icons.package" [size]="17"></lucide-icon>
+          <span>ออเดอร์</span>
+        </a>
+        <a routerLink="/customers" routerLinkActive="active" class="nav-item">
+          <lucide-icon [img]="icons.users" [size]="17"></lucide-icon>
+          <span>ลูกค้า</span>
+        </a>
+      </ng-container>
+      <a *ngIf="user.role !== 'customer'" routerLink="/rider" routerLinkActive="active" class="nav-item rider-link">
+        <lucide-icon [img]="icons.bike" [size]="17"></lucide-icon>
+        <span>{{ auth.isAdmin() ? 'หน้าไรเดอร์' : 'ใบงานของฉัน' }}</span>
+      </a>
+      <a *ngIf="user.role === 'customer'" routerLink="/account" routerLinkActive="active" class="nav-item">
+        <lucide-icon [img]="icons.userRound" [size]="17"></lucide-icon>
+        <span>บัญชีของฉัน</span>
+      </a>
+
+      <span *ngIf="user.role !== 'customer'" class="nav-divider" aria-hidden="true"></span>
+
+      <span class="user-chip" [title]="user.role === 'admin' ? 'ผู้ดูแลร้าน' : user.role === 'rider' ? 'ไรเดอร์' : 'ลูกค้า'">
+        <lucide-icon [img]="icons.userRound" [size]="15"></lucide-icon>
+        {{ user.username }}
+      </span>
+      <button type="button" class="logout-btn" (click)="auth.logout()" title="ออกจากระบบ" aria-label="ออกจากระบบ">
+        <lucide-icon [img]="icons.logOut" [size]="17"></lucide-icon>
+      </button>
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,52 @@
+.customer-account-layout {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+.customer-account-card {
+  width: min(100%, 560px);
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.account-eyebrow {
+  color: var(--brand-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.customer-account-card h1 {
+  margin: 5px 0 22px;
+  font-size: 25px;
+}
+
+.profile-details {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.profile-details div {
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-details dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-details dd {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.account-message {
+  margin-bottom: 20px;
+  color: var(--muted);
+}

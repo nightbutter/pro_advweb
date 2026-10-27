@@ -1,0 +1,79 @@
+<div class="login-shell">
+  <!-- แผงซ้าย: บอกว่าระบบนี้ทำอะไร -->
+  <section class="login-intro" aria-hidden="true">
+    <div class="intro-mark">
+      <lucide-icon [img]="icons.utensils" [size]="28"></lucide-icon>
+    </div>
+    <h2>ส่งข้าวกล่องให้ทันพักเที่ยง</h2>
+    <p>ระบบจัดเส้นทางและแบ่งงานไรเดอร์ ออกจากร้าน 11:30 ถึงมือลูกค้าก่อน 12:30</p>
+    <ul class="intro-points">
+      <li><lucide-icon [img]="icons.route" [size]="18"></lucide-icon> จัดเส้นทางให้ไรเดอร์ 13 คนในคลิกเดียว</li>
+      <li><lucide-icon [img]="icons.wallet" [size]="18"></lucide-icon> เห็นกำไร-ต้นทุนค่าส่งทันที</li>
+      <li><lucide-icon [img]="icons.navigation" [size]="18"></lucide-icon> ไรเดอร์เปิดใบงานและนำทางจากมือถือ</li>
+    </ul>
+  </section>
+
+  <!-- แผงขวา: ฟอร์มเข้าสู่ระบบ -->
+  <section class="login-panel">
+    <form class="login-card" (ngSubmit)="submit()" novalidate>
+      <div class="login-header">
+        <h1>เข้าสู่ระบบ</h1>
+        <p>สำหรับแอดมินร้าน ไรเดอร์ และลูกค้า</p>
+      </div>
+
+      <div class="form-group">
+        <label for="username">ชื่อผู้ใช้</label>
+        <div class="input-icon">
+          <lucide-icon [img]="icons.user" [size]="17"></lucide-icon>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            [(ngModel)]="username"
+            placeholder="เช่น admin หรือ rider01"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">รหัสผ่าน</label>
+        <div class="input-icon">
+          <lucide-icon [img]="icons.lock" [size]="17"></lucide-icon>
+          <input
+            id="password"
+            name="password"
+            [type]="showPassword ? 'text' : 'password'"
+            autocomplete="current-password"
+            [(ngModel)]="password"
+            required
+          />
+          <button type="button" class="toggle-pw" (click)="showPassword = !showPassword">
+            {{ showPassword ? 'ซ่อน' : 'แสดง' }}
+          </button>
+        </div>
+      </div>
+
+      <div *ngIf="errorMessage" class="alert alert-error" role="alert">
+        <lucide-icon [img]="icons.alert" [size]="18"></lucide-icon>
+        <span>{{ errorMessage }}</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg btn-block" [disabled]="loading">
+        <span class="btn-ico" [class.spin]="loading"><lucide-icon [img]="loading ? icons.refresh : icons.logIn" [size]="18"></lucide-icon></span>
+        {{ loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ' }}
+      </button>
+
+      <div class="register-prompt">
+        <span>ยังไม่มีบัญชีลูกค้า?</span>
+        <a routerLink="/register">สมัครสมาชิก</a>
+      </div>
+
+      <p class="hint">
+        <lucide-icon [img]="icons.info" [size]="15"></lucide-icon>
+        ไรเดอร์ใช้ชื่อผู้ใช้ rider01 – rider13 ตามเบอร์ของตัวเอง
+      </p>
+    </form>
+  </section>
+</div>

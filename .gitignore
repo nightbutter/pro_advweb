@@ -10,7 +10,6 @@ node_modules/
 # Build output
 dist/
 .angular/
-.vercel/
 
 # Editor
 .vscode/
@@ -19,3 +18,6 @@ dist/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Embedded Postgres test data
+.embedded-pg/

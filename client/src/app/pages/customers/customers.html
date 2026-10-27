@@ -1,0 +1,155 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-eyebrow">
+        <lucide-icon [img]="icons.users" [size]="15"></lucide-icon> จัดการลูกค้า
+      </div>
+      <h1 class="page-title">ข้อมูลลูกค้าและพิกัดจัดส่ง</h1>
+      <p class="page-subtitle">บันทึกตำแหน่งบ้าน/หอพักของลูกค้า เพื่อให้ระบบจัดเส้นทางได้แม่นยำ</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <lucide-icon [img]="icons.plus" [size]="17"></lucide-icon>
+        เพิ่มลูกค้าใหม่
+      </button>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <!-- ตารางรายชื่อลูกค้า -->
+    <div class="card table-card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <lucide-icon [img]="icons.users" [size]="18"></lucide-icon>
+          รายชื่อลูกค้า
+          <span class="badge">{{ customers.length }} คน</span>
+        </h3>
+        <div class="input-icon search-box">
+          <lucide-icon [img]="icons.search" [size]="16"></lucide-icon>
+          <input type="search" [(ngModel)]="searchTerm" placeholder="ค้นหาชื่อ เบอร์โทร หรือที่อยู่" aria-label="ค้นหาลูกค้า" />
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>ลูกค้า</th>
+              <th>สถานที่ / หอพัก</th>
+              <th>โซน</th>
+              <th>พิกัด</th>
+              <th class="right">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of filteredCustomers; let i = index" [class.selected]="selectedCustomer?.id === c.id">
+              <td class="cell-muted num">{{ i + 1 }}</td>
+              <td>
+                <div class="cell-strong">{{ c.name }}</div>
+                <a [href]="'tel:' + c.phone" class="phone-link">
+                  <lucide-icon [img]="icons.phone" [size]="13"></lucide-icon>{{ c.phone }}
+                </a>
+              </td>
+              <td class="address-cell">{{ c.address }}</td>
+              <td><span class="badge badge-brand" *ngIf="c.zone">{{ c.zone }}</span></td>
+              <td>
+                <button class="coord-btn num" (click)="focusOnMap(c)" title="ดูบนแผนที่">
+                  <lucide-icon [img]="icons.mapPin" [size]="14"></lucide-icon>
+                  {{ c.lat.toFixed(4) }}, {{ c.lng.toFixed(4) }}
+                </button>
+              </td>
+              <td>
+                <div class="cell-actions">
+                  <button class="icon-btn" title="แก้ไข" aria-label="แก้ไขลูกค้า" (click)="editCustomer(c)">
+                    <lucide-icon [img]="icons.pencil" [size]="15"></lucide-icon>
+                  </button>
+                  <button class="icon-btn danger" title="ลบ" aria-label="ลบลูกค้า" (click)="deleteCustomer(c)">
+                    <lucide-icon [img]="icons.trash" [size]="15"></lucide-icon>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr *ngIf="filteredCustomers.length === 0">
+              <td colspan="6">
+                <div class="empty-state">
+                  <lucide-icon [img]="icons.search" [size]="36"></lucide-icon>
+                  <strong>{{ searchTerm ? 'ไม่พบลูกค้าที่ค้นหา' : 'ยังไม่มีข้อมูลลูกค้า' }}</strong>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- แผนที่ -->
+    <div class="card map-card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <lucide-icon [img]="icons.mapPinned" [size]="18"></lucide-icon>
+          แผนที่บ้านลูกค้า
+        </h3>
+        <span class="badge badge-info">ม.มหาสารคาม ขามเรียง</span>
+      </div>
+      <div id="customer-map" class="map-view"></div>
+      <div class="alert alert-info map-hint" *ngIf="isModalOpen">
+        <lucide-icon [img]="icons.lightbulb" [size]="17"></lucide-icon>
+        <span>คลิกบนแผนที่ หรือลากหมุด เพื่อเปลี่ยนพิกัดในฟอร์มได้ทันที</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- หน้าต่างเพิ่ม / แก้ไขลูกค้า -->
+  <div class="modal-backdrop side" *ngIf="isModalOpen">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>
+          <lucide-icon [img]="editMode ? icons.pencil : icons.plus" [size]="20"></lucide-icon>
+          {{ editMode ? 'แก้ไขข้อมูลลูกค้า' : 'เพิ่มลูกค้าใหม่' }}
+        </h3>
+        <button class="icon-btn" type="button" aria-label="ปิด" (click)="closeModal()">
+          <lucide-icon [img]="icons.x" [size]="17"></lucide-icon>
+        </button>
+      </div>
+      <form (ngSubmit)="saveCustomer()">
+        <div class="form-group">
+          <label for="c-name">ชื่อลูกค้า / หอพัก <span class="req">*</span></label>
+          <input id="c-name" type="text" [(ngModel)]="formCustomer.name" name="name" required placeholder="เช่น คุณสมศรี หอพักร่มเย็น" />
+        </div>
+        <div class="form-group">
+          <label for="c-phone">เบอร์โทรศัพท์ <span class="req">*</span></label>
+          <input id="c-phone" type="tel" [(ngModel)]="formCustomer.phone" name="phone" required placeholder="เช่น 081-234-5678" />
+        </div>
+        <div class="form-group">
+          <label for="c-address">ที่อยู่ / จุดสังเกต <span class="req">*</span></label>
+          <textarea id="c-address" [(ngModel)]="formCustomer.address" name="address" required rows="2" placeholder="เช่น หอพักเอสเพลส ซอยวุ่นวาย ขามเรียง"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="customer-zone">โซนจัดส่ง <span class="req">*</span></label>
+          <select id="customer-zone" [(ngModel)]="formCustomer.zone" name="zone" required>
+            <option *ngFor="let z of zones" [value]="z">{{ z }}</option>
+          </select>
+        </div>
+        <div class="coords-row">
+          <div class="form-group">
+            <label for="c-lat">ละติจูด (Lat)</label>
+            <input id="c-lat" type="number" step="any" [(ngModel)]="formCustomer.lat" name="lat" required />
+          </div>
+          <div class="form-group">
+            <label for="c-lng">ลองจิจูด (Lng)</label>
+            <input id="c-lng" type="number" step="any" [(ngModel)]="formCustomer.lng" name="lng" required />
+          </div>
+        </div>
+        <p class="field-hint">
+          <lucide-icon [img]="icons.locate" [size]="14"></lucide-icon>
+          คลิกบนแผนที่เพื่อปักหมุดได้เลย ไม่ต้องพิมพ์พิกัดเอง
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModal()">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">{{ editMode ? 'บันทึกการแก้ไข' : 'บันทึกลูกค้า' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

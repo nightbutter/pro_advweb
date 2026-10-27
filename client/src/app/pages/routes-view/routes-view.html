@@ -1,0 +1,159 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-eyebrow">
+        <lucide-icon [img]="icons.route" [size]="15"></lucide-icon> จัดเส้นทางและแบ่งงาน
+      </div>
+      <h1 class="page-title">แผนส่งข้าวกล่องมื้อเที่ยง</h1>
+      <p class="page-subtitle">ออกจากร้าน 11:30 น. ต้องถึงลูกค้าก่อน 12:30 น. · ไรเดอร์ประจำ 13 คน รับคนละไม่เกิน 3 ออเดอร์</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-primary btn-lg" (click)="recalculateRoutes()" [disabled]="recalculating">
+        <span class="btn-ico" [class.spin]="recalculating"><lucide-icon [img]="recalculating ? icons.refresh : icons.zap" [size]="18"></lucide-icon></span>
+        {{ recalculating ? 'กำลังคำนวณ…' : 'คำนวณเส้นทางใหม่' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- สรุปการเงินและเวลา -->
+  <div class="summary" *ngIf="planResult?.summary as s">
+    <div class="profit-hero" [class.loss]="s.netProfit < 0">
+      <div class="hero-label">
+        <lucide-icon [img]="icons.trendingUp" [size]="16"></lucide-icon>
+        กำไรสุทธิมื้อเที่ยงนี้
+      </div>
+      <div class="hero-value num">{{ s.netProfit | number: '1.2-2' }} <span>฿</span></div>
+      <div class="hero-sub">
+        อัตรากำไร <strong class="num">{{ s.profitMarginPercent }}%</strong>
+        <span class="hero-tag" [class.ok]="s.profitMarginPercent >= 24">
+          <lucide-icon [img]="s.profitMarginPercent >= 24 ? icons.check : icons.warning" [size]="14"></lucide-icon>
+          {{ s.profitMarginPercent >= 24 ? 'ตามเป้า 24–25%' : 'ต่ำกว่าเป้า' }}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat">
+      <span class="stat-icon green"><lucide-icon [img]="icons.banknote" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">รายได้รวม</div>
+        <div class="stat-value">{{ s.totalRevenue | number: '1.0-0' }} ฿</div>
+        <div class="stat-sub">{{ s.totalBoxes }} กล่อง × 65 ฿</div>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon amber"><lucide-icon [img]="icons.handCoins" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">ค่าส่งไรเดอร์</div>
+        <div class="stat-value">{{ s.totalDeliveryCost | number: '1.2-2' }} ฿</div>
+        <div class="stat-sub">ระยะทางรวม {{ s.totalDistanceKm }} กม.</div>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon"><lucide-icon [img]="icons.chefHat" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">ต้นทุนอาหาร</div>
+        <div class="stat-value">{{ s.totalFoodCost | number: '1.0-0' }} ฿</div>
+        <div class="stat-sub">{{ s.totalOrders }} ออเดอร์ × 40 ฿/กล่อง</div>
+      </div>
+    </div>
+    <div class="stat" [class.late]="!s.allOnTime">
+      <span class="stat-icon" [ngClass]="s.allOnTime ? 'green' : 'red'">
+        <lucide-icon [img]="s.allOnTime ? icons.timer : icons.warning" [size]="20"></lucide-icon>
+      </span>
+      <div>
+        <div class="stat-label">เวลาส่งมอบ</div>
+        <div class="stat-value" [class.text-ok]="s.allOnTime" [class.text-bad]="!s.allOnTime">
+          {{ s.allOnTime ? 'ทัน 12:30 น.' : 'เสี่ยงเลท' }}
+        </div>
+        <div class="stat-sub">ใช้ไรเดอร์ {{ s.assignedRidersCount }} จาก 13 คน</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <!-- แผนที่ -->
+    <div class="card map-card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <lucide-icon [img]="icons.map" [size]="18"></lucide-icon>
+          เส้นทางจัดส่ง แยกสีตามไรเดอร์
+        </h3>
+        <button class="btn btn-secondary btn-sm" (click)="resetMapView()">
+          <lucide-icon [img]="icons.crosshair" [size]="15"></lucide-icon>
+          ดูทั้งหมด
+        </button>
+      </div>
+      <div id="routing-map" class="map-view"></div>
+      <p class="map-hint">
+        <lucide-icon [img]="icons.lightbulb" [size]="14"></lucide-icon>
+        คลิกเส้นบนแผนที่หรือการ์ดไรเดอร์ด้านขวา เพื่อดูเส้นทางของคนนั้นคนเดียว
+      </p>
+    </div>
+
+    <!-- รายการใบงานไรเดอร์ -->
+    <aside class="riders-panel">
+      <div class="panel-head">
+        <h3 class="card-title">
+          <lucide-icon [img]="icons.clipboard" [size]="18"></lucide-icon>
+          ใบงานไรเดอร์
+        </h3>
+        <span class="badge">{{ routeCount }} คนได้รับงาน</span>
+      </div>
+
+      <div class="rider-list">
+        <div
+          role="button"
+          tabindex="0"
+          *ngFor="let route of planResult?.routes"
+          class="rider-card"
+          [class.highlighted]="selectedRiderId === route.riderId"
+          [class.dimmed]="selectedRiderId !== null && selectedRiderId !== route.riderId"
+          [style.--rider]="route.color"
+          (click)="highlightRider(route)"
+          (keydown.enter)="highlightRider(route)"
+        >
+          <div class="rc-top">
+            <span class="rc-dot" [style.backgroundColor]="route.color"></span>
+            <div class="rc-name">
+              <strong>{{ route.riderName }}</strong>
+              <span class="rc-meta">
+                <span class="mono">{{ route.jobCode }}</span> · โซน{{ route.zone }}
+              </span>
+            </div>
+            <span class="rc-time" [class.late]="route.isLate">
+              <lucide-icon [img]="icons.clock" [size]="13"></lucide-icon>
+              {{ route.estimatedFinishTime }}
+            </span>
+          </div>
+
+          <div class="rc-metrics num">
+            <span><lucide-icon [img]="icons.package" [size]="13"></lucide-icon>{{ route.totalBoxes }} กล่อง</span>
+            <span><lucide-icon [img]="icons.route" [size]="13"></lucide-icon>{{ route.totalDistanceKm }} กม.</span>
+            <span><lucide-icon [img]="icons.handCoins" [size]="13"></lucide-icon>{{ route.totalDeliveryCost | number: '1.1-1' }} ฿</span>
+            <span class="rc-profit"><lucide-icon [img]="icons.trendingUp" [size]="13"></lucide-icon>{{ route.netProfit | number: '1.1-1' }} ฿</span>
+          </div>
+
+          <ol class="rc-stops">
+            <li *ngFor="let wp of route.waypoints" [class.shop]="wp.type === 'shop'">
+              <span class="stop-node">
+                <lucide-icon *ngIf="wp.type === 'shop'" [img]="icons.store" [size]="12"></lucide-icon>
+                <ng-container *ngIf="wp.type !== 'shop'">{{ wp.stepNumber }}</ng-container>
+              </span>
+              <span class="stop-time num">{{ wp.estimatedArrival }}</span>
+              <span class="stop-name">
+                {{ wp.customerName }}
+                <small *ngIf="wp.type === 'delivery'">· {{ wp.boxCount }} กล่อง</small>
+              </span>
+            </li>
+          </ol>
+        </div>
+
+        <div class="empty-state" *ngIf="routeCount === 0">
+          <lucide-icon [img]="icons.bike" [size]="36"></lucide-icon>
+          <strong>ยังไม่มีใบงาน</strong>
+          <span>เพิ่มออเดอร์ก่อน แล้วกด “คำนวณเส้นทางใหม่”</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>

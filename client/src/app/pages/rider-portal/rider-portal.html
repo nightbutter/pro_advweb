@@ -1,0 +1,131 @@
+<div class="rider-page">
+  <!-- แถบหัว -->
+  <div class="app-bar">
+    <span class="app-bar-icon"><lucide-icon [img]="icons.bike" [size]="22"></lucide-icon></span>
+    <div>
+      <h1>ใบงานไรเดอร์</h1>
+      <p>ส่งตามลำดับจุด เพื่อให้ถึงทุกคนก่อน 12:30 น.</p>
+    </div>
+  </div>
+
+  <!-- แอดมิน: เลือกดูใบงานของไรเดอร์คนไหนก็ได้ -->
+  <div class="card job-search" *ngIf="auth.isAdmin()">
+    <label for="jobCode">
+      <lucide-icon [img]="icons.key" [size]="15"></lucide-icon>
+      เลขใบงาน หรือ เลือกไรเดอร์
+    </label>
+    <div class="search-row">
+      <input id="jobCode" type="text" [(ngModel)]="jobInput" placeholder="เช่น 1, 2, TASK-01" (keyup.enter)="searchJob()" />
+      <button class="btn btn-primary" (click)="searchJob()">ดูใบงาน</button>
+    </div>
+    <div class="rider-chips" *ngIf="allRiders.length">
+      <button
+        *ngFor="let r of allRiders"
+        type="button"
+        class="rider-chip"
+        [class.active]="currentRoute?.riderId === r.id"
+        [style.--chip]="r.color"
+        (click)="selectRider(r.id)"
+      >
+        <span class="chip-dot"></span>{{ r.id }}
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="errorMessage" class="alert alert-error" role="alert">
+    <lucide-icon [img]="icons.alert" [size]="18"></lucide-icon>
+    <span>{{ errorMessage }}</span>
+  </div>
+
+  <div class="loading-line" *ngIf="loading && !currentRoute">กำลังโหลดใบงาน…</div>
+
+  <ng-container *ngIf="currentRoute as route">
+    <!-- สรุปงาน -->
+    <section class="job-summary" [style.--rider]="route.color">
+      <div class="js-head">
+        <div class="js-who">
+          <div class="js-tags">
+            <span class="tag mono">{{ route.jobCode }}</span>
+            <span class="tag">โซน{{ route.zone }}</span>
+          </div>
+          <h2>{{ route.riderName }}</h2>
+          <a class="js-phone" [href]="'tel:' + route.riderPhone">
+            <lucide-icon [img]="icons.phone" [size]="14"></lucide-icon>{{ route.riderPhone }}
+          </a>
+        </div>
+        <div class="js-boxes">
+          <span class="js-boxes-num num">{{ route.totalBoxes }}</span>
+          <span class="js-boxes-label">กล่องที่ต้องหยิบ</span>
+        </div>
+      </div>
+
+      <div class="js-strip num">
+        <div>
+          <span>ออกจากร้าน</span>
+          <strong>11:30 น.</strong>
+        </div>
+        <div>
+          <span>ส่งเสร็จ</span>
+          <strong [class.late]="route.isLate">{{ route.estimatedFinishTime }} น.</strong>
+        </div>
+        <div>
+          <span>ระยะทาง</span>
+          <strong>{{ route.totalDistanceKm }} กม.</strong>
+        </div>
+        <div>
+          <span>ค่ารอบนี้</span>
+          <strong>{{ route.totalDeliveryCost | number: '1.0-0' }} ฿</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- ลำดับจุดส่ง -->
+    <h3 class="section-title">
+      <lucide-icon [img]="icons.mapPinned" [size]="17"></lucide-icon>
+      ลำดับจุดส่ง ({{ deliveryCount }} จุด)
+    </h3>
+
+    <ol class="stops" [style.--rider]="route.color">
+      <li *ngFor="let wp of route.waypoints" class="stop" [class.shop]="wp.type === 'shop'">
+        <div class="stop-rail">
+          <span class="stop-node">
+            <lucide-icon *ngIf="wp.type === 'shop'" [img]="icons.store" [size]="15"></lucide-icon>
+            <ng-container *ngIf="wp.type !== 'shop'">{{ wp.stepNumber }}</ng-container>
+          </span>
+        </div>
+
+        <div class="stop-body">
+          <div class="stop-meta num">
+            <span class="eta">
+              <lucide-icon [img]="icons.clock" [size]="13"></lucide-icon>
+              {{ wp.type === 'shop' ? 'ออก' : 'ถึง' }} {{ wp.estimatedArrival }} น.
+            </span>
+            <span class="dist" *ngIf="wp.distanceFromPrevKm > 0">+{{ wp.distanceFromPrevKm }} กม.</span>
+          </div>
+
+          <div class="stop-name">
+            {{ wp.customerName }}
+            <span *ngIf="wp.boxCount" class="box-pill num">{{ wp.boxCount }} กล่อง</span>
+          </div>
+          <div class="stop-address" *ngIf="wp.customerAddress">{{ wp.customerAddress }}</div>
+
+          <div class="stop-actions" *ngIf="wp.type === 'delivery'">
+            <a *ngIf="wp.customerPhone" [href]="'tel:' + wp.customerPhone" class="btn btn-secondary">
+              <lucide-icon [img]="icons.phone" [size]="16"></lucide-icon>
+              โทร
+            </a>
+            <a [href]="getGoogleMapsUrl(wp.lat, wp.lng)" target="_blank" rel="noopener" class="btn btn-primary">
+              <lucide-icon [img]="icons.navigation" [size]="16"></lucide-icon>
+              นำทาง Google Maps
+            </a>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <div class="rule-note">
+      <lucide-icon [img]="icons.flag" [size]="18"></lucide-icon>
+      <p>ส่งครบแล้วขับกลับร้าน · ห้ามส่งเกิน <strong>12:30 น.</strong> เพราะลูกค้าจะหมดเวลาพักเที่ยง</p>
+    </div>
+  </ng-container>
+</div>

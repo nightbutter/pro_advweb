@@ -1,0 +1,180 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-eyebrow">
+        <lucide-icon [img]="icons.package" [size]="15"></lucide-icon> จัดการออเดอร์
+      </div>
+      <h1 class="page-title">ออเดอร์มื้อเที่ยงวันนี้</h1>
+      <p class="page-subtitle">รับออเดอร์ 10:00–11:30 น. · แต่ละออเดอร์สั่งได้ไม่เกิน 3 กล่อง</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-secondary" (click)="simulateOrders()" [disabled]="simulating">
+        <lucide-icon [img]="icons.dices" [size]="17"></lucide-icon>
+        {{ simulating ? 'กำลังสุ่ม…' : 'สุ่มออเดอร์ (28–35 รายการ)' }}
+      </button>
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <lucide-icon [img]="icons.plus" [size]="17"></lucide-icon>
+        สร้างออเดอร์ใหม่
+      </button>
+    </div>
+  </div>
+
+  <!-- ตัวเลขสรุป -->
+  <div class="stat-grid">
+    <div class="stat">
+      <span class="stat-icon blue"><lucide-icon [img]="icons.clipboard" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">ออเดอร์วันนี้</div>
+        <div class="stat-value">{{ orders.length }}</div>
+        <div class="stat-sub">รายการ</div>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon"><lucide-icon [img]="icons.package" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">ข้าวกล่องทั้งหมด</div>
+        <div class="stat-value">{{ totalBoxes }}</div>
+        <div class="stat-sub">กล่อง</div>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon green"><lucide-icon [img]="icons.banknote" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">ยอดขายรวม</div>
+        <div class="stat-value">{{ totalRevenue | number: '1.0-0' }} ฿</div>
+        <div class="stat-sub">65 ฿ / กล่อง</div>
+      </div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon amber"><lucide-icon [img]="icons.chefHat" [size]="20"></lucide-icon></span>
+      <div>
+        <div class="stat-label">ต้นทุนอาหาร</div>
+        <div class="stat-value">{{ totalFoodCost | number: '1.0-0' }} ฿</div>
+        <div class="stat-sub">40 ฿ / กล่อง</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ตารางออเดอร์ -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <lucide-icon [img]="icons.receipt" [size]="18"></lucide-icon>
+        รายการสั่งซื้อ
+        <span class="badge">{{ orders.length }} รายการ</span>
+      </h3>
+      <button class="btn btn-danger-soft btn-sm" *ngIf="orders.length > 0" (click)="clearAllOrders()">
+        <lucide-icon [img]="icons.trash" [size]="15"></lucide-icon>
+        ล้างออเดอร์ทั้งหมด
+      </button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>เลขที่ออเดอร์</th>
+            <th>เวลาที่สั่ง</th>
+            <th>ลูกค้า</th>
+            <th>สถานที่จัดส่ง</th>
+            <th>จำนวน</th>
+            <th class="right">ยอดเงิน</th>
+            <th>สถานะ</th>
+            <th class="right">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let ord of orders">
+            <td class="cell-strong mono">{{ ord.orderNumber }}</td>
+            <td class="cell-muted num">
+              <span class="with-icon"><lucide-icon [img]="icons.clock" [size]="14"></lucide-icon>{{ (ord.orderTime || '10:30').slice(0, 5) }}</span>
+            </td>
+            <td>
+              <div class="cell-strong">{{ ord.customerName }}</div>
+              <a *ngIf="ord.customerPhone" class="phone" [href]="'tel:' + ord.customerPhone">{{ ord.customerPhone }}</a>
+            </td>
+            <td class="address-cell">
+              {{ ord.customerAddress }}
+              <span *ngIf="ord.zone" class="zone">{{ ord.zone }}</span>
+            </td>
+            <td>
+              <span class="badge" [ngClass]="getBoxBadgeClass(ord.boxCount)">{{ ord.boxCount }} กล่อง</span>
+            </td>
+            <td class="right cell-strong num">{{ ord.boxCount * 65 }} ฿</td>
+            <td>
+              <span class="badge" [class.badge-success]="ord.status === 'assigned'" [class.badge-warning]="ord.status !== 'assigned'">
+                {{ ord.status === 'assigned' ? 'จัดไรเดอร์แล้ว' : 'รอจัดส่ง' }}
+              </span>
+            </td>
+            <td>
+              <div class="cell-actions">
+                <button class="icon-btn" title="แก้ไข" aria-label="แก้ไขออเดอร์" (click)="openEditModal(ord)">
+                  <lucide-icon [img]="icons.pencil" [size]="15"></lucide-icon>
+                </button>
+                <button class="icon-btn danger" title="ลบ" aria-label="ลบออเดอร์" (click)="deleteOrder(ord)">
+                  <lucide-icon [img]="icons.trash" [size]="15"></lucide-icon>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="!loading && orders.length === 0">
+            <td colspan="8">
+              <div class="empty-state">
+                <lucide-icon [img]="icons.inbox" [size]="40"></lucide-icon>
+                <strong>ยังไม่มีออเดอร์สำหรับมื้อเที่ยงนี้</strong>
+                <span>กด “สุ่มออเดอร์” ด้านบนเพื่อทดลองระบบ หรือสร้างออเดอร์ใหม่</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- หน้าต่างสร้าง / แก้ไขออเดอร์ -->
+  <div class="modal-backdrop" *ngIf="isModalOpen" (click)="closeModal()">
+    <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>
+          <lucide-icon [img]="editMode ? icons.pencil : icons.plus" [size]="20"></lucide-icon>
+          {{ editMode ? 'แก้ไขออเดอร์' : 'สร้างออเดอร์ใหม่' }}
+        </h3>
+        <button class="icon-btn" type="button" aria-label="ปิด" (click)="closeModal()">
+          <lucide-icon [img]="icons.x" [size]="17"></lucide-icon>
+        </button>
+      </div>
+      <form (ngSubmit)="saveOrder()">
+        <div class="form-group" *ngIf="!editMode">
+          <label for="order-customer">ลูกค้า <span class="req">*</span></label>
+          <select id="order-customer" [(ngModel)]="selectedCustomerId" name="customerId" required>
+            <option [ngValue]="null" disabled>— เลือกลูกค้า —</option>
+            <option *ngFor="let c of customers" [ngValue]="c.id">{{ c.name }} ({{ c.address }})</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>จำนวนข้าวกล่อง <span class="req">*</span></label>
+          <div class="box-picker" role="radiogroup" aria-label="จำนวนข้าวกล่อง">
+            <button
+              *ngFor="let n of boxOptions"
+              type="button"
+              class="box-option"
+              role="radio"
+              [attr.aria-checked]="formBoxCount === n"
+              [class.active]="formBoxCount === n"
+              (click)="formBoxCount = n"
+            >
+              <span class="box-count">{{ n }}</span>
+              <span class="box-unit">กล่อง</span>
+              <span class="box-price num">{{ n * 65 }} ฿</span>
+            </button>
+          </div>
+          <span class="field-hint">เงื่อนไขร้าน: สั่งได้ไม่เกิน 3 กล่องต่อออเดอร์</span>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModal()">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">บันทึกออเดอร์</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

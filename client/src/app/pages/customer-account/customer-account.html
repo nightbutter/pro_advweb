@@ -1,0 +1,26 @@
+<main class="customer-account-layout">
+  <section class="customer-account-card">
+    <span class="account-eyebrow">บัญชีลูกค้า</span>
+    <h1>ข้อมูลของฉัน</h1>
+
+    <p *ngIf="loading" class="account-message" role="status">กำลังโหลดข้อมูล…</p>
+    <div *ngIf="errorMessage" class="alert alert-error" role="alert">{{ errorMessage }}</div>
+
+    <dl *ngIf="profile as customer" class="profile-details">
+      <div>
+        <dt>ชื่อ-นามสกุล</dt>
+        <dd>{{ customer.name }}</dd>
+      </div>
+      <div>
+        <dt>เบอร์โทรศัพท์</dt>
+        <dd>{{ customer.phone }}</dd>
+      </div>
+      <div>
+        <dt>ที่อยู่</dt>
+        <dd>{{ customer.address }}</dd>
+      </div>
+    </dl>
+
+    <button class="btn btn-secondary" type="button" (click)="logout()">ออกจากระบบ</button>
+  </section>
+</main>

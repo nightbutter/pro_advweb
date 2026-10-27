@@ -4,11 +4,12 @@
     "module": "commonjs",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*"]
+  "include": ["*.ts", "controller/**/*.ts", "model/**/*.ts", "services/**/*.ts", "seed/**/*.ts"]
 }

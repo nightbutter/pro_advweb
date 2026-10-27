@@ -1,46 +1,84 @@
 # Smart Rider Backend – คู่มือ API และการ Deploy
 
-## ภาพรวมและ Base URL
+Base URL
+- Local: `http://localhost:3000/api`
+- Vercel: `https://pro-advweb-ef39.vercel.app/api`
 
-| สภาพแวดล้อม | Backend origin | API base | Health |
+ทุกเส้นรับ/ส่ง JSON (`Content-Type: application/json`)
+Error ทุกเส้นมีรูปแบบ `{ "error": "ข้อความ" }` พร้อม status 400 / 401 / 403 / 404 / 500 / 503
+(500 จะตอบข้อความกลางๆ `เกิดข้อผิดพลาดภายในระบบ` รายละเอียดจริงดูได้ใน log ของ server)
+- `503 {"error":"Database initialization failed"}` = DB ยังไม่พร้อม/เชื่อมต่อไม่ได้ ระหว่าง cold start (serverless จะ retry init ให้ใน request ถัดไปอัตโนมัติ)
+
+## การยืนยันตัวตน (JWT)
+
+ทุกเส้นยกเว้น `/api/health`, `/api/auth/login` และ `/api/auth/register/customer` ต้องส่ง header
+```
+Authorization: Bearer <token>
+```
+- ไม่ส่ง token / token ผิด / หมดอายุ (8 ชั่วโมง) → `401`
+- token ถูกแต่สิทธิ์ไม่พอ → `403`
+
+บัญชีเริ่มต้น (สร้างให้อัตโนมัติตอนสร้างฐานข้อมูลครั้งแรก)
+
+| Username | Role | รหัสผ่าน (local) | รหัสผ่าน (production) |
 |---|---|---|---|
-| **Production (Vercel)** | `https://backend-pro-advweb.vercel.app` | `https://backend-pro-advweb.vercel.app/api` | `https://backend-pro-advweb.vercel.app/api/health` |
-| **Local development** | `http://localhost:3000` | `http://localhost:3000/api` | `http://localhost:3000/api/health` |
+| `admin` | admin | `admin1234` | ค่าจาก env `ADMIN_PASSWORD` |
+| `rider01` – `rider13` | rider (ผูกกับไรเดอร์เบอร์ 1–13) | `rider1234` | ค่าจาก env `RIDER_PASSWORD` |
 
-ทุกเส้นอยู่ใต้ prefix `/api` (mount ใน `src/index.ts`) และรับ/ส่ง JSON (`Content-Type: application/json`)
+### POST `/api/auth/login`
+```json
+{ "username": "rider01", "password": "rider1234" }
+```
+ผลลัพธ์
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": { "userId": 2, "username": "rider01", "role": "rider", "riderId": 1 }
+}
+```
+ชื่อผู้ใช้หรือรหัสผ่านผิด → `401`
 
-## ข้อตกลงทั่วไป (Request/Error Conventions)
+### GET `/api/auth/me`
+คืนข้อมูลผู้ใช้ของ token ปัจจุบัน `{ "user": { ... } }`
+สำหรับบัญชีลูกค้า จะคืนข้อมูลโปรไฟล์ `{ "profile": { "name": "...", "phone": "...", "address": "..." } }` เพิ่มเติม
 
-- Error ทุกเส้นมีรูปแบบ `{ "error": "ข้อความ" }` พร้อม status `400` / `404` / `500`
-- path ใต้ `/api` ที่ไม่มีอยู่จริง → `404 { "error": "Not found: METHOD /api/..." }` (JSON เสมอ ไม่มี HTML error page)
-- request body ที่เป็น JSON เสียรูป → `400 { "error": "Malformed request body" }`
-- error ฝั่ง server ไม่ leak stack trace หรือ path ภายใน
-- ยังไม่มีระบบ authentication ใครมี URL ก็เรียกได้ทุกเส้น **รวมถึงเส้นที่ลบข้อมูล**
+### POST `/api/auth/register/customer`
+สร้างบัญชีลูกค้าและบันทึกชื่อ เบอร์โทร และที่อยู่ โดยยังไม่เก็บพิกัด (ไม่ต้องส่ง token)
+```json
+{
+  "name": "สมชาย ใจดี",
+  "phone": "081-234-5678",
+  "address": "หอพัก A ขามเรียง",
+  "username": "somchai01",
+  "password": "securepass123"
+}
+```
+ชื่อผู้ใช้ 3–24 ตัวอักษร, รหัสผ่าน 8–128 ตัวอักษร; ชื่อผู้ใช้ที่ซ้ำตอบ `409`
 
 ## สรุปทุกเส้น
 
-| # | Method | Path | หน้าที่ |
-|---|---|---|---|
-| 1 | GET | `/api/health` | เช็คว่า server ทำงาน |
-| 2 | GET | `/api/customers` | ลูกค้าทั้งหมด |
-| 3 | GET | `/api/customers/:id` | ลูกค้า 1 คน |
-| 4 | POST | `/api/customers` | เพิ่มลูกค้า |
-| 5 | PUT | `/api/customers/:id` | แก้ไขลูกค้า |
-| 6 | DELETE | `/api/customers/:id` | ลบลูกค้า (ลบออเดอร์ของลูกค้าด้วย) |
-| 7 | GET | `/api/customers/search?q=` | ค้นหาลูกค้าจากบางส่วนของชื่อ |
-| 8 | GET | `/api/customers/nearby?lat=&lng=` | ลูกค้าในรัศมี 1 กม. |
-| 9 | GET | `/api/orders` | ออเดอร์ทั้งหมด |
-| 10 | GET | `/api/orders/nearby?lat=&lng=` | ออเดอร์ในรัศมี 2 กม. |
-| 11 | POST | `/api/orders` | เพิ่มออเดอร์ |
-| 12 | PUT | `/api/orders/:id` | แก้ไขออเดอร์ |
-| 13 | DELETE | `/api/orders/:id` | ลบออเดอร์ 1 รายการ |
-| 14 | DELETE | `/api/orders` | ลบออเดอร์ทั้งหมด |
-| 15 | POST | `/api/orders/simulate` | จำลองออเดอร์มื้อเที่ยง |
-| 16 | GET | `/api/riders` | ไรเดอร์ทั้งหมด (13 คน) |
-| 17 | GET | `/api/riders/:idOrCode` | ไรเดอร์ 1 คน |
-| 18 | POST | `/api/routes/optimize` | คำนวณเส้นทางใหม่ |
-| 19 | GET | `/api/routes/current` | แผนเส้นทางล่าสุด |
-| 20 | GET | `/api/routes/rider/:jobCodeOrId` | ใบงานของไรเดอร์ 1 คน |
+| # | Method | Path | หน้าที่ | สิทธิ์ |
+|---|---|---|---|---|
+| 1 | GET | `/api/health` | เช็คว่า server ทำงาน | ทุกคน |
+| 2 | POST | `/api/auth/login` | เข้าสู่ระบบ รับ token | ทุกคน |
+| 3 | POST | `/api/auth/register/customer` | สมัครลูกค้าและบันทึกโปรไฟล์ | ทุกคน |
+| 4 | GET | `/api/auth/me` | ข้อมูลผู้ใช้ปัจจุบัน | login แล้ว |
+| 5 | GET | `/api/customers` | ลูกค้าทั้งหมด | admin |
+| 6 | GET | `/api/customers/:id` | ลูกค้า 1 คน | admin |
+| 7 | POST | `/api/customers` | เพิ่มลูกค้า | admin |
+| 8 | PUT | `/api/customers/:id` | แก้ไขลูกค้า | admin |
+| 9 | DELETE | `/api/customers/:id` | ลบลูกค้า (ลบออเดอร์ของลูกค้าด้วย) | admin |
+| 10 | GET | `/api/orders` | ออเดอร์ทั้งหมด | admin |
+| 11 | POST | `/api/orders` | เพิ่มออเดอร์ | admin |
+| 12 | PUT | `/api/orders/:id` | แก้ไขออเดอร์ | admin |
+| 13 | DELETE | `/api/orders/:id` | ลบออเดอร์ 1 รายการ | admin |
+| 14 | DELETE | `/api/orders` | ลบออเดอร์ทั้งหมด | admin |
+| 15 | POST | `/api/orders/simulate` | จำลองออเดอร์มื้อเที่ยง | admin |
+| 16 | GET | `/api/riders` | ไรเดอร์ทั้งหมด (rider เห็นแค่ตัวเอง) | admin, rider |
+| 17 | GET | `/api/riders/:idOrCode` | ไรเดอร์ 1 คน (rider ดูได้แค่ตัวเอง) | admin, rider |
+| 18 | POST | `/api/routes/optimize` | คำนวณเส้นทางใหม่ | admin |
+| 19 | GET | `/api/routes/current` | แผนเส้นทางล่าสุด | admin |
+| 20 | GET | `/api/routes/rider/:jobCodeOrId` | ใบงานของไรเดอร์ (rider ดูได้แค่ของตัวเอง) | admin, rider |
 
 ---
 
@@ -48,9 +86,8 @@
 
 ### GET `/api/health`
 ```json
-{ "status": "ok", "timestamp": "2026-10-09T03:00:00.000Z", "storage": "ephemeral" }
+{ "status": "ok", "timestamp": "2026-10-09T03:00:00.000Z" }
 ```
-- `storage`: `"ephemeral"` เมื่อรันบน Vercel (SQLite ใน `/tmp`) / `"file"` เมื่อรัน local
 
 ---
 
@@ -58,8 +95,9 @@
 
 ข้อมูลลูกค้า
 ```json
-{ "id": 1, "name": "สมชาย", "phone": "0812345678", "address": "หอพัก A ขามเรียง", "lat": 16.2468, "lng": 103.2521 }
+{ "id": 1, "name": "สมชาย", "phone": "0812345678", "address": "หอพัก A ขามเรียง", "lat": 16.2468, "lng": 103.2521, "zone": "ขามเรียง" }
 ```
+`zone`: `ขามเรียง` / `ท่าขอนยาง` / `หน้าป้าย` (ใช้แบ่งพื้นที่ส่งให้ไรเดอร์)
 
 ### GET `/api/customers`
 คืน array ของลูกค้า เรียง id จากใหม่ไปเก่า
@@ -68,39 +106,23 @@
 คืนลูกค้า 1 คน ถ้าไม่พบ → `404 Customer not found`
 
 ### POST `/api/customers`
-Body (บังคับทุกฟิลด์ ถ้าขาดหรือค่าไม่ถูกต้อง → `400`)
+Body (บังคับทุกฟิลด์ยกเว้น `zone` ถ้าขาด → `400`)
 ```json
 { "name": "สมชาย", "phone": "0812345678", "address": "หอพัก A ขามเรียง", "lat": 16.2468, "lng": 103.2521 }
 ```
-- `lat` ต้องเป็นตัวเลข −90..90 และ `lng` −180..180 ถ้าไม่ใช่ → `400`
-- ตอบ `201` พร้อมลูกค้าที่สร้าง (มี `id`)
+- `zone` ไม่บังคับ ถ้าไม่ส่ง server เดาให้จากที่อยู่/pickติกัด (ค่าที่ส่งต้องตรง 3 โซน ไม่งั้น → `400`)
+
+ตอบ `201` พร้อมลูกค้าที่สร้าง (มี `id` และ `zone`)
 
 ### PUT `/api/customers/:id`
-Body เหมือน POST — **ต้องส่งครบทุกฟิลด์** ถ้าขาดฟิลด์หรือ `lat`/`lng` ไม่ถูกต้อง → `400`
+Full replacement — Body เหมือน POST ต้องส่งครบทุกฟิลด์ ถ้าขาดหรือ lat/lng ไม่ใช่ตัวเลข → `400` (row จะไม่ถูกแก้)
+`zone` ไม่ส่งได้ — server เดาให้เหมือน POST
 ตอบลูกค้าที่แก้แล้ว ถ้าไม่พบ → `404`
 
 ### DELETE `/api/customers/:id`
 ลบลูกค้าและออเดอร์ทั้งหมดของลูกค้าคนนั้น
 ```json
 { "success": true, "message": "Customer deleted" }
-```
-
-### GET `/api/customers/search?q=<ข้อความ>`
-ค้นหาลูกค้าจาก **บางส่วนของชื่อ** (column `name` เก็บชื่อเต็ม ดังนั้นจับคู่ได้ทั้งชื่อและนามสกุล)
-- `q` บังคับ ถ้าขาดหรือว่าง → `400`
-- ตัวอักษร `%`, `_`, `\` ใน q ถูก escape เป็น literal
-- คืน array ของลูกค้า (รูปแบบเดียวกับ GET /api/customers) เรียง id จากใหม่ไปเก่า
-
-### GET `/api/customers/nearby?lat=<ละติจูด>&lng=<ลองจิจูด>[&radiusKm=<กิโลเมตร>]`
-ค้นหาลูกค้าในรัศมี **1 กิโลเมตร** (ค่าเริ่มต้น `radiusKm=1`) จากพิกัดที่ระบุ
-- `lat`, `lng` บังคับ ต้องเป็นตัวเลข lat ∈ [-90,90], lng ∈ [-180,180] ถ้าขาด/ไม่ถูกต้อง → `400`
-- `radiusKm` ไม่บังคับ หน่วยเป็นกิโลเมตร รับเฉพาะค่า `0.5, 1, 2, 3, 5, 10` ถ้าไม่ตรง → `400`
-- `radius` (เมตร, ตัวเลข > 0 อิสระ) ยังใช้ได้เพื่อความเข้ากันได้กับเวอร์ชันเก่า — ถ้าส่งทั้งสองอย่าง `radiusKm` มี priority กว่า
-- ระยะทางคำนวณด้วยสูตร Haversine (รัศมีโลก 6,371,000 ม.) เทียบแบบ `ระยะ <= radius` (รวมขอบเขตพอดี)
-- ลูกค้าที่ไม่มีพิกัดที่ถูกต้องจะถูกข้าม
-
-```json
-{ "radiusMeters": 1000, "count": 22, "customers": [ { "id": 1, "name": "...", "lat": 16.2482, "lng": 103.2488, "distanceMeters": 132.1 } ] }
 ```
 
 ---
@@ -121,6 +143,7 @@ Body เหมือน POST — **ต้องส่งครบทุกฟิ
   "customerName": "สมชาย",
   "customerPhone": "0812345678",
   "customerAddress": "หอพัก A ขามเรียง",
+  "zone": "ขามเรียง",
   "lat": 16.2468,
   "lng": 103.2521
 }
@@ -130,22 +153,12 @@ Body เหมือน POST — **ต้องส่งครบทุกฟิ
 ### GET `/api/orders`
 คืน array ของออเดอร์ทั้งหมด เรียง id จากน้อยไปมาก
 
-### GET `/api/orders/nearby?lat=<ละติจูด>&lng=<ลองจิจูด>[&radiusKm=<กิโลเมตร>]`
-ค้นหาออเดอร์ในรัศมี **2 กิโลเมตร** (ค่าเริ่มต้น `radiusKm=2`) จากพิกัดที่ระบุ
-- พิกัดของออเดอร์ = พิกัดที่อยู่จัดส่งของลูกค้า (JOIN จากตาราง customers)
-- validation และรูปแบบผลลัพธ์เหมือน `/api/customers/nearby` แต่คืน `orders` พร้อมข้อมูลลูกค้าและ `distanceMeters`
-
-```json
-{ "radiusMeters": 2000, "count": 28, "orders": [ { "id": 1, "orderNumber": "ORD-LUNCH-001", "customerName": "...", "boxCount": 2, "lat": 16.2482, "lng": 103.2488, "distanceMeters": 132.1 } ] }
-```
-
 ### POST `/api/orders`
 ```json
 { "customerId": 1, "boxCount": 2 }
 ```
-- `boxCount` ต้องเป็นจำนวนเต็ม 1–3 ถ้าไม่ใช่ → `400`
-- `customerId` ต้องอ้างถึงลูกค้าที่มีอยู่จริง ถ้าไม่พบ → `400 Customer not found`
-- server สร้าง `orderNumber`, `orderTime` (เวลาปัจจุบัน) และ `status = pending` ให้
+- `boxCount` ต้องเป็น 1–3 ถ้าไม่ใช่ → `400` เช่นเดียวกับ `customerId` ที่ไม่มีจริง
+- server สร้าง `orderNumber` (จาก DB sequence — ปลอดภัยแม้สร้างพร้อมกันหลาย request), `orderTime` (เวลาปัจจุบัน) และ `status = pending` ให้
 
 ตอบ `201` พร้อมออเดอร์ที่สร้าง
 
@@ -154,7 +167,7 @@ Body เหมือน POST — **ต้องส่งครบทุกฟิ
 ```json
 { "boxCount": 3, "customerId": 2 }
 ```
-ถ้าไม่พบ → `404` ถ้า `boxCount` ไม่ใช่จำนวนเต็ม 1–3 → `400` ถ้า `customerId` ไม่มีอยู่จริง → `400`
+ถ้าไม่พบ → `404` ถ้า `boxCount` ไม่ใช่ 1–3 → `400`
 
 ### DELETE `/api/orders/:id`
 ```json
@@ -162,18 +175,20 @@ Body เหมือน POST — **ต้องส่งครบทุกฟิ
 ```
 
 ### DELETE `/api/orders`
-ลบออเดอร์ทั้งหมด — ⚠️ **destructive** ห้ามยิงไปที่ production เพื่อทดสอบ
+ลบออเดอร์ทั้งหมด
 ```json
 { "success": true, "message": "All orders cleared" }
 ```
 
 ### POST `/api/orders/simulate`
-ลบออเดอร์เดิมทั้งหมด แล้วสร้างออเดอร์จำลองใหม่ — ⚠️ **destructive** (ลบออเดอร์จริงทิ้งทั้งหมด)
+ลบออเดอร์เดิมทั้งหมด แล้วสร้างออเดอร์จำลองใหม่
 ```json
 { "count": 28 }
 ```
-- `count` ไม่บังคับ (ค่าเริ่มต้น 28) ถ้าส่งต้องเป็น **จำนวนเต็ม 1–500** ถ้าไม่ถูกต้อง → `400` และ **ออเดอร์เดิมจะไม่ถูกลบ**
+- `count` ไม่บังคับ ถ้าไม่ส่ง ระบบสุ่ม 28–35 รายการ ถ้าส่งต้องเป็นจำนวนเต็ม 1–100 ไม่งั้น → `400`
+- สุ่มลูกค้าไม่ซ้ำกันในแต่ละรอบ (ยกเว้น count มากกว่าจำนวนลูกค้า)
 - ออเดอร์ชื่อ `ORD-LUNCH-001`... วนตามลูกค้า สุ่ม 1–3 กล่อง เวลาสั่ง 10:00–10:45
+- request พร้อมกันหลายตัวจะถูก serialize ด้วย advisory lock — ทุก request สำเร็จ ผลลัพธ์คือ simulation ชุดสุดท้าย (last-writer-wins)
 
 ```json
 { "message": "Simulated 28 lunch orders successfully!", "orders": [ ... ] }
@@ -256,129 +271,51 @@ RiderRoute
 - แผนเส้นทางเก็บในหน่วยความจำ ถ้า server restart แผนจะหาย
 - หลังเพิ่ม/แก้/ลบออเดอร์ ต้องเรียก `POST /api/routes/optimize` ใหม่ ไม่งั้น `/current` จะคืนแผนเก่า
 
----
+### ตัวอย่างลำดับการใช้งาน (PowerShell)
+```powershell
+$B = "http://localhost:3000/api"
+$login = Invoke-RestMethod -Method Post "$B/auth/login" -ContentType "application/json" -Body '{"username":"admin","password":"admin1234"}'
+$H = @{ Authorization = "Bearer $($login.token)" }
 
-## 6. ตัวอย่างการทดสอบ Production และ Local
-
-### Production (`https://backend-pro-advweb.vercel.app/api`)
-
-```bash
-# health
-curl "https://backend-pro-advweb.vercel.app/api/health"
-
-# ลูกค้าทั้งหมด / ไรเดอร์ / ออเดอร์
-curl "https://backend-pro-advweb.vercel.app/api/customers"
-curl "https://backend-pro-advweb.vercel.app/api/riders"
-curl "https://backend-pro-advweb.vercel.app/api/orders"
-
-# ค้นหาลูกค้าจากบางส่วนของชื่อ (URL-encode ข้อความภาษาไทย)
-curl "https://backend-pro-advweb.vercel.app/api/customers/search?q=%E0%B8%AB%E0%B8%AD%E0%B8%9E%E0%B8%B1%E0%B8%81"
-
-# ลูกค้าในรัศมี 1 กม. จากจุดตั้งร้าน (16.2465, 103.2505)
-curl "https://backend-pro-advweb.vercel.app/api/customers/nearby?lat=16.2465&lng=103.2505"
-
-# ออเดอร์ในรัศมี 2 กม.
-curl "https://backend-pro-advweb.vercel.app/api/orders/nearby?lat=16.2465&lng=103.2505"
-
-# ใบงานไรเดอร์ / แผนเส้นทางล่าสุด (อ่านอย่างเดียว ปลอดภัย)
-curl "https://backend-pro-advweb.vercel.app/api/routes/rider/TASK-01"
-curl "https://backend-pro-advweb.vercel.app/api/routes/current"
+Invoke-RestMethod -Method Post "$B/orders/simulate" -Headers $H -ContentType "application/json" -Body '{}'
+Invoke-RestMethod -Method Post "$B/routes/optimize" -Headers $H -ContentType "application/json" -Body '{"seed":0}'
+Invoke-RestMethod "$B/routes/rider/TASK-01" -Headers $H
 ```
-
-ตัวอย่าง POST/PUT ที่ **เขียนข้อมูลจริงลง production** — ใช้เฉพาะตอนจำเป็นและควรลบข้อมูลทดสอบออกหลังใช้:
-```bash
-# สร้างลูกค้า (เขียนข้อมูลจริง)
-curl -X POST "https://backend-pro-advweb.vercel.app/api/customers" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"ทดสอบ","phone":"0800000000","address":"ทดสอบ","lat":16.25,"lng":103.25}'
-
-# แก้ไขลูกค้า id 31 (ต้องส่งครบทุกฟิลด์)
-curl -X PUT "https://backend-pro-advweb.vercel.app/api/customers/31" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"ทดสอบ2","phone":"0800000001","address":"ทดสอบ","lat":16.25,"lng":103.25}'
-```
-
-> ⚠️ **ห้ามรันคำสั่งเหล่านี้กับ production เพื่อทดสอบ** เพราะทำลาย/เปลี่ยนข้อมูลจริง:
-> `DELETE /api/orders`, `DELETE /api/orders/:id`, `DELETE /api/customers/:id`, `POST /api/orders/simulate` (ลบออเดอร์ทั้งหมดแล้วสร้างใหม่)
-
-### Local development (`http://localhost:3000/api`)
-
-ตัวอย่างข้างล่างนี้สำหรับ **local เท่านั้น** — ปลอดภัยที่จะทดลองเต็มที่รวมถึงคำสั่ง destructive:
-
-```bash
-# รัน backend ก่อน: cd server && npm run dev
-curl "http://localhost:3000/api/health"
-
-# ค้นหา + รัศมี (local)
-curl "http://localhost:3000/api/customers/search?q=สมชาย"
-curl "http://localhost:3000/api/customers/nearby?lat=16.2465&lng=103.2505"
-curl "http://localhost:3000/api/orders/nearby?lat=16.2465&lng=103.2505"
-
-# สร้างลูกค้าใหม่ (local)
-curl -X POST "http://localhost:3000/api/customers" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"สมชาย","phone":"0812345678","address":"หอพัก A ขามเรียง","lat":16.2468,"lng":103.2521}'
-
-# สร้าง/แก้ไขออเดอร์ (local)
-curl -X POST "http://localhost:3000/api/orders" \
-  -H "Content-Type: application/json" \
-  -d '{"customerId":1,"boxCount":2}'
-curl -X PUT "http://localhost:3000/api/orders/1" \
-  -H "Content-Type: application/json" \
-  -d '{"boxCount":3}'
-
-# ลำดับการใช้งานเต็ม (local) — simulate ลบออเดอร์เดิมทั้งหมดก่อนสร้างใหม่
-curl -X POST "http://localhost:3000/api/orders/simulate" -H "Content-Type: application/json" -d '{"count":28}'
-curl -X POST "http://localhost:3000/api/routes/optimize" -H "Content-Type: application/json" -d '{"seed":0}'
-curl "http://localhost:3000/api/routes/rider/TASK-01"
-```
-
-หมายเหตุ: คำสั่ง curl บน Windows อาจต้องใช้ Git Bash / PowerShell หรือส่ง query ภาษาไทยแบบ percent-encoded ตามตัวอย่าง production ด้านบน
 
 ---
 
-## 7. CORS และ Environment Configuration
+## Deploy Backend บน Vercel
 
-CORS ของ backend (`src/index.ts`) อนุญาตเฉพาะ origin เหล่านี้:
-- `https://pro-advweb.vercel.app` (production frontend)
-- preview deployments `https://pro-advweb-*.vercel.app`
-- `http://localhost:4200`, `http://127.0.0.1:4200` (Angular dev server)
-- origin ใน env `FRONTEND_URL` ถ้าตั้งไว้
-- request ที่ไม่มี `Origin` header (curl, health check) ผ่านเสมอ
-
-origin ที่ไม่อยู่ใน list: request **จะได้รับ response ปกติแต่ไม่มี CORS headers** — browser จะ block ฝั่ง client (ไม่ใช่ error 500)
-
-Frontend อ่าน URL ของ API จาก environment file:
-- `client/src/environments/environment.ts` — production (`ng build`) ชี้ไปที่ `https://backend-pro-advweb.vercel.app/api`
-- `client/src/environments/environment.development.ts` — ใช้ตอน `ng serve` ชี้ไปที่ `http://localhost:3000/api`
-
-Environment variables ของ backend (ทั้งหมดไม่บังคับ):
-- `FRONTEND_URL` — เพิ่ม origin ที่อนุญาตใน CORS
-- `PORT` — port ตอนรัน local (default 3000)
-- `VERCEL` — Vercel ตั้งให้อัตโนมัติ ใช้ตัดสินว่าเขียน SQLite ลง `/tmp`
-
----
-
-## 8. Deploy บน Vercel
-
-โปรเจกต์นี้ deploy เป็น **2 Vercel projects แยกกัน** (dashboard settings — ตรวจจาก repo ไม่ได้ทั้งหมด):
-
-| Project | Root Directory | หมายเหตุ |
-|---|---|---|
-| Frontend | `client` | มี `client/vercel.json`: `outputDirectory: dist/frontend/browser` + SPA rewrite ทุก path → `/index.html` |
-| Backend | `server` | ไม่มี `vercel.json` — Vercel หา entrypoint `src/index.ts` เอง (มี `export default app`) |
-
-### ข้อจำกัดที่ต้องรู้ก่อน
-- Backend ใช้ SQLite (ไฟล์) แต่ Vercel เขียนไฟล์ได้เฉพาะ `/tmp` และข้อมูลใน `/tmp` จะหายเมื่อ function ถูกปิด/เปิดใหม่ หรือเมื่อ deploy ใหม่
-- ผลคือข้อมูลที่เพิ่ม/แก้จะหายเป็นระยะ แล้ว server จะ seed ข้อมูลตัวอย่างใหม่ให้ ใช้สำหรับ demo ได้ แต่ไม่เหมาะกับข้อมูลจริง
-- ถ้าต้องเก็บข้อมูลถาวร ให้ย้ายไปใช้ฐานข้อมูลภายนอก เช่น Turso (SQLite บนคลาวด์), Neon/Supabase (Postgres) หรือ deploy backend บน Render/Railway ที่มี disk แทน
+### ฐานข้อมูล (Neon PostgreSQL)
+- Backend ใช้ **PostgreSQL บน Neon** ผ่าน driver `pg` (node-postgres) — ข้อมูลไม่หายเมื่อ function รีสตาร์ท (แก้ปัญหา `/tmp` ของ SQLite เดิม)
+- `DATABASE_URL` — connection string แบบ **pooled** (host มี `-pooler`) ใช้ตอน runtime
+- `DATABASE_URL_UNPOOLED` — connection string แบบ direct สำหรับรัน migration (`npm run migrate`) จากเครื่อง/CI
+- รายละเอียดเต็มอยู่ใน `DATABASE_MIGRATION.md` ที่ root ของ repo
 - แผนเส้นทาง (`latestPlan`) เก็บในหน่วยความจำ บน Vercel อาจหายระหว่าง request ได้ ให้เรียก `POST /api/routes/optimize` ก่อนดึงแผนเสมอ
 
-### สิ่งที่โค้ดรองรับแล้ว
-- `src/index.ts` มี `export default app` และเรียก `app.listen` เฉพาะตอนไม่ได้รันบน Vercel
-- `src/database/connection.ts` ใช้ `/tmp/database.sqlite` เมื่อรันบน Vercel (ตัวแปร `VERCEL` ถูกตั้งให้อัตโนมัติ)
+### Environment Variables (ต้องตั้งก่อน deploy)
+ตั้งที่ Vercel → Project → Settings → Environment Variables แล้วกด Redeploy
 
-### วิธี deploy backend ใหม่ (ผ่านหน้าเว็บ Vercel)
+| ชื่อ | ค่า |
+|---|---|
+| `JWT_SECRET` | สตริงสุ่มยาวๆ สร้างด้วย `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `ADMIN_PASSWORD` | รหัสผ่านของ `admin` |
+| `RIDER_PASSWORD` | รหัสผ่านของ `rider01`–`rider13` |
+| `CORS_ORIGINS` | URL ของ frontend คั่นด้วย `,` เช่น `http://localhost:4200,https://my-frontend.vercel.app` |
+| `DATABASE_URL` | Neon pooled connection string (`postgresql://...-pooler...neon.tech/neondb?sslmode=require`) |
+| `DATABASE_URL_UNPOOLED` | Neon direct connection string (สำหรับ `npm run migrate` จาก CI/เครื่อง) |
+
+ถ้าไม่ตั้ง 3 ตัวแรก server จะไม่ยอมเริ่มทำงาน เพื่อไม่ให้ใช้รหัสผ่านเริ่มต้นบน production
+ถ้า `DATABASE_URL` หาย → ทุกเส้นตอบ `503 {"error":"Database initialization failed"}`
+ดูตัวอย่างได้ที่ `server/.env.example` (ห้าม commit ไฟล์ `.env` ที่มีค่าจริง)
+
+### สิ่งที่โค้ดรองรับแล้ว
+- `app.ts` และ `server.ts` มี `export default app`; `server.ts` เรียก `listen` เฉพาะตอนไม่ได้รันบน Vercel
+- ทุก request บน Vercel จะรอ `initDatabase()` (สร้างตาราง + seed ถ้ายังว่าง) ก่อนตอบเสมอ — ล้มเหลวจะตอบ 503 ไม่ใช่ crash
+- Cold start พร้อมกันหลายตัวปลอดภัยด้วย `pg_advisory_xact_lock` — ไม่มี seed ชนกัน
+- Vercel หา entrypoint (`app.ts` / `server.ts` ที่รากโฟลเดอร์ server) เองได้ ไม่ต้องมี `vercel.json`
+
+### วิธีที่ 1: ผ่านหน้าเว็บ Vercel (แนะนำ)
 1. Push โค้ดขึ้น GitHub
 2. ไปที่ https://vercel.com/new แล้วเลือก Import repo `ADVWEB`
 3. ตั้งค่าโปรเจกต์
@@ -388,7 +325,7 @@ Environment variables ของ backend (ทั้งหมดไม่บัง
 4. กด Deploy
 5. ทดสอบ: เปิด `https://<project-name>.vercel.app/api/health`
 
-หลังจากนี้ทุกครั้งที่ push ขึ้น `main` Vercel จะ deploy ให้อัตโนมัติ (ตรวจสอบแล้วว่า auto-deploy ทำงานจริง)
+หลังจากนี้ทุกครั้งที่ push ขึ้น `main` Vercel จะ deploy ให้อัตโนมัติ
 
 ### วิธีที่ 2: ผ่าน Vercel CLI
 ```bash
@@ -400,19 +337,12 @@ vercel --prod   # deploy ขึ้น production
 ```
 ทดสอบในเครื่องแบบเดียวกับบน Vercel ได้ด้วย `vercel dev`
 
-### ถ้า backend ย้าย URL
-แก้ `apiUrl` ใน `client/src/environments/environment.ts` เท่านั้น ไม่ต้องแก้ service — แล้ว rebuild + redeploy frontend
+### เชื่อม Frontend กับ Backend ที่ deploy แล้ว
+แก้ `baseUrl` ใน `client/src/app/config/api.ts`
+```ts
+private baseUrl = 'https://<project-name>.vercel.app/api';
+```
 
-### ถ้าเปลี่ยน domain frontend
-เพิ่ม origin ใน `server/src/index.ts` (อาเรย์ `allowedOrigins`) หรือตั้งค่า env `FRONTEND_URL` บน Vercel
-
----
-
-## 9. Database Persistence และ Known Limitations
-
-- **Local:** SQLite ไฟล์ `server/database.sqlite` (gitignored) — ข้อมูลถาวรตามปกติ
-- **Vercel:** SQLite ถูกเขียนลง `/tmp/database.sqlite` เท่านั้น — ทุก deployment และ cold start จะเริ่มจากฐานข้อมูลใหม่ที่ถูก seed อัตโนมัติ (เช็คได้จาก `GET /api/health` → `"storage": "ephemeral"`) **ข้อมูล production ไม่ถาวร**
-- ถ้าต้องการเก็บข้อมูลจริงถาวร ให้ย้ายไปฐานข้อมูลภายนอก เช่น Turso (`@libsql/client` — API คล้าย SQLite มาก แก้เฉพาะ `src/database/connection.ts`), Neon/Supabase (Postgres) แล้วตั้งค่า connection string เป็น Vercel Environment Variable เช่น `DATABASE_URL` / `TURSO_AUTH_TOKEN` — **ห้าม hardcode credentials ในโค้ด**
-- แผนเส้นทาง (`latestPlan`) อยู่ในหน่วยความจำ อาจหายระหว่าง request บน serverless — เรียก `POST /api/routes/optimize` ใหม่ทุกครั้งก่อนดึง `/current` หรือใบงานไรเดอร์
-- `better-sqlite3` ต้อง compile สำหรับ Linux ตอน build บน Vercel — ถ้า build log error เกี่ยวกับ `better-sqlite3` / `node-gyp` ให้ตั้ง Node.js Version เป็น **22.x** ใน Project Settings → Build and Deployment
-- ถ้าเปิดแล้วได้ 500 ให้ดู error ที่ Project → Logs
+### ถ้า deploy ไม่ผ่าน
+- ถ้าเปิดแล้วได้ 500/503 ให้ดู error ที่ Project → Logs — ส่วนใหญ่คือ `DATABASE_URL` ยังไม่ได้ตั้งค่าหรือ sslmode ไม่ถูกต้อง
+- ไม่มี native dependency แล้ว (`pg` เป็น pure JavaScript) build บน Vercel ใช้ Node เวอร์ชันปกติได้เลย
