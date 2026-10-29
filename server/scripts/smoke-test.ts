@@ -35,6 +35,7 @@ async function main() {
   const databaseUrl = `postgres://postgres:postgres@localhost:${PORT}/riderdb?sslmode=disable`;
   process.env.DATABASE_URL = databaseUrl;
   process.env.PORT = String(APP_PORT);
+  process.env.ROAD_DISTANCE ??= 'off';
 
   // Verify migrations apply cleanly first (schema_migrations tracking).
   const mig = new Client({ connectionString: databaseUrl, ssl: false });

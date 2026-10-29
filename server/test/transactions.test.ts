@@ -85,7 +85,7 @@ test('pool remains usable after a failed transaction', async () => {
 // --- rollback through real API paths (trigger-injected failures) ---
 
 test('customer delete: failure AFTER deleting orders rolls back the order delete', async () => {
-  const cust = (await req(base, 'POST', '/customers', { name: 'TDel', phone: 'p', address: 'a', lat: 16.2, lng: 103.2 }, admin)).body;
+  const cust = (await req(base, 'POST', '/customers', { name: 'TDel', phone: 'p', address: 'a', lat: 16.25, lng: 103.25 }, admin)).body;
   const ord = (await req(base, 'POST', '/orders', { customerId: cust.id, boxCount: 1 }, admin)).body;
 
   await installTrigger('customers', 'trg_fail_cust_del', 'DELETE');
