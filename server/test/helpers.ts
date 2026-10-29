@@ -133,6 +133,7 @@ export async function startApp(url: string, _port: number): Promise<string> {
   const port = await allocatePort();
   process.env.DATABASE_URL = url;
   process.env.PORT = String(port);
+  process.env.ROAD_DISTANCE = 'off';
   await import('../server');
   appImported = true;
   const base = `http://localhost:${port}/api`;

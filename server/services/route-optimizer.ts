@@ -1,14 +1,13 @@
 import { Order } from '../model/order';
 import { Rider } from '../model/rider';
-import { RoutePoint, RiderRoute, RouteOptimizationResult } from '../model/route-plan';
+import { RoutePoint, RiderRoute, RouteOptimizationResult, OutOfRangeOrder } from '../model/route-plan';
 import { SHOP_LOCATION } from '../dbconnect';
 import { ZONES, Zone, isZone, inferZone } from '../model/zones';
 
 const MAX_ORDERS_PER_RIDER = 3;
 
-// Haversine distance in Kilometers
 export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -21,7 +20,23 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
   return Number((R * c).toFixed(2));
 }
 
-// Format minutes from 11:30 to HH:mm string
+export function routePoints(orders: Order[], shop = SHOP_LOCATION): { lat: number; lng: number }[] {
+  return [
+    { lat: shop.lat, lng: shop.lng },
+    ...orders.map(o => ({ lat: o.lat ?? shop.lat, lng: o.lng ?? shop.lng }))
+  ];
+}
+
+export const MAX_DELIVERY_RADIUS_KM = 3;
+
+export function distanceFromShopKm(lat: number, lng: number, shop = SHOP_LOCATION): number {
+  return calculateDistanceKm(shop.lat, shop.lng, lat, lng);
+}
+
+export function isWithinDeliveryArea(lat: number, lng: number, shop = SHOP_LOCATION): boolean {
+  return distanceFromShopKm(lat, lng, shop) <= MAX_DELIVERY_RADIUS_KM;
+}
+
 export function getEstimatedTimeStr(minutesFromStart: number): string {
   const startHour = 11;
   const startMinute = 30;
@@ -32,26 +47,12 @@ export function getEstimatedTimeStr(minutesFromStart: number): string {
 }
 
 export class RouteOptimizerService {
-  /**
-   * Optimize routes for orders:
-   * 1. Group orders by delivery zone (ขามเรียง / ท่าขอนยาง / หน้าป้าย)
-   * 2. Inside each zone, sort by angle & distance from shop and split into
-   *    clusters of at most 3 orders (rider limit)
-   * 3. Assign to 13 available fixed riders
-   * 4. Optimize each rider route with TSP (Nearest Neighbor from shop)
-   * 5. Calculate cost, time, profit based on business rules:
-   *    - Rider speed: 30 km/h (0.5 km/min)
-   *    - Delivery handover time per stop: 3 minutes
-   *    - Base fee: 15 THB
-   *    - Distance fee: 2 THB * km * boxes
-   *    - Selling price: 65 THB / box
-   *    - Food cost: 40 THB / box
-   */
   public optimize(
     orders: Order[],
     riders: Rider[],
     shop = SHOP_LOCATION,
-    strategySeed: number = 0
+    strategySeed: number = 0,
+    distanceMatrix?: number[][]
   ): RouteOptimizationResult {
     if (orders.length === 0) {
       return {
@@ -67,29 +68,52 @@ export class RouteOptimizerService {
           netProfit: 0,
           profitMarginPercent: 0,
           onTimeDeliveryRate: 100,
-          allOnTime: true
+          allOnTime: true,
+          outOfRangeOrders: []
         },
         shopLocation: shop
       };
     }
 
-    // 1. Prepare order points with zone and angle from shop
-    const orderItems = orders.map(o => {
+    const points = routePoints(orders, shop);
+    const matrix =
+      distanceMatrix &&
+      distanceMatrix.length === points.length &&
+      distanceMatrix.every(row => row.length === points.length)
+        ? distanceMatrix
+        : undefined;
+    const dist = (a: number, b: number): number =>
+      matrix
+        ? matrix[a][b]
+        : calculateDistanceKm(points[a].lat, points[a].lng, points[b].lat, points[b].lng);
+
+    const orderItems = orders.map((o, i) => {
+      const idx = i + 1;
       const lat = o.lat ?? shop.lat;
       const lng = o.lng ?? shop.lng;
       const zone: Zone = isZone(o.zone) ? o.zone : inferZone(lat, lng, o.customerAddress);
-      // Angle is only used to order stops inside a zone; seed rotates the start point
       const angle = Math.atan2(lat - shop.lat, lng - shop.lng) + (strategySeed * 0.15);
-      const distFromShop = calculateDistanceKm(shop.lat, shop.lng, lat, lng);
-      return { order: o, lat, lng, zone, angle, distFromShop };
+      const distFromShop = dist(0, idx);
+      return { order: o, idx, lat, lng, zone, angle, distFromShop };
     });
     type OrderItem = typeof orderItems[number];
 
-    // 2. Group by zone, then split each zone into clusters of max 3 orders.
-    //    A rider never crosses into another zone.
+    const outOfRangeOrders: OutOfRangeOrder[] = [];
+    const deliverableItems = orderItems.filter(item => {
+      const km = distanceFromShopKm(item.lat, item.lng, shop);
+      if (km <= MAX_DELIVERY_RADIUS_KM) return true;
+      outOfRangeOrders.push({
+        orderId: item.order.id,
+        orderNumber: item.order.orderNumber,
+        customerName: item.order.customerName,
+        distanceKm: km
+      });
+      return false;
+    });
+
     const clusters: { zone: Zone; items: OrderItem[] }[] = [];
     for (const zone of ZONES) {
-      const inZone = orderItems
+      const inZone = deliverableItems
         .filter(item => item.zone === zone)
         .sort((a, b) => a.angle - b.angle || a.distFromShop - b.distFromShop);
       for (let i = 0; i < inZone.length; i += MAX_ORDERS_PER_RIDER) {
@@ -97,21 +121,16 @@ export class RouteOptimizerService {
       }
     }
 
-    // Available active riders (up to 13)
     const activeRiders = riders.filter(r => r.status === 'active');
     const riderRoutes: RiderRoute[] = [];
 
-    // Assign clusters to riders
     for (let i = 0; i < clusters.length; i++) {
       const { zone, items: cluster } = clusters[i];
       const rider = activeRiders[i % activeRiders.length];
       const riderColor = rider.color;
 
-      // TSP: Find shortest tour starting at shop
-      // Shop -> Order A -> Order B -> Order C
       const unvisited = [...cluster];
-      let currentLat = shop.lat;
-      let currentLng = shop.lng;
+      let currentIdx = 0;
       let totalDistKm = 0;
       let totalMinutes = 0;
 
@@ -133,12 +152,11 @@ export class RouteOptimizerService {
       let totalBoxes = cluster.reduce((sum, item) => sum + item.order.boxCount, 0);
 
       while (unvisited.length > 0) {
-        // Find nearest neighbor
         let nearestIdx = 0;
-        let minD = calculateDistanceKm(currentLat, currentLng, unvisited[0].lat, unvisited[0].lng);
+        let minD = dist(currentIdx, unvisited[0].idx);
 
         for (let j = 1; j < unvisited.length; j++) {
-          const d = calculateDistanceKm(currentLat, currentLng, unvisited[j].lat, unvisited[j].lng);
+          const d = dist(currentIdx, unvisited[j].idx);
           if (d < minD) {
             minD = d;
             nearestIdx = j;
@@ -148,9 +166,8 @@ export class RouteOptimizerService {
         const next = unvisited.splice(nearestIdx, 1)[0];
         totalDistKm += minD;
 
-        // Rider moves at 30 km/h = 2 minutes per km + 3 minutes delivery handover
         const travelMinutes = (minD / 30) * 60;
-        totalMinutes += travelMinutes + 3; // + 3 mins for delivery handover
+        totalMinutes += travelMinutes + 3;
 
         const arrivalTimeStr = getEstimatedTimeStr(totalMinutes);
 
@@ -175,8 +192,7 @@ export class RouteOptimizerService {
           deliverySequence: step
         });
 
-        currentLat = next.lat;
-        currentLng = next.lng;
+        currentIdx = next.idx;
         step++;
       }
 
@@ -184,20 +200,15 @@ export class RouteOptimizerService {
       const roundedMinutes = Math.round(totalMinutes);
       const finishTimeStr = getEstimatedTimeStr(roundedMinutes);
 
-      // Financial calculations according to user specs:
-      // - 15 Baht base fee per ride
-      // - 2 Baht per km per box for whole route distance
-      //   (Total distance * total boxes * 2 Baht)
       const baseDeliveryFee = 15;
       const distanceBoxFee = Number((2 * totalDistKm * totalBoxes).toFixed(2));
       const totalDeliveryCost = baseDeliveryFee + distanceBoxFee;
 
-      const totalRevenue = totalBoxes * 65; // 65 Baht per box
-      const totalFoodCost = totalBoxes * 40; // 40 Baht food cost
+      const totalRevenue = totalBoxes * 65;
+      const totalFoodCost = totalBoxes * 40;
       const netProfit = Number((totalRevenue - totalFoodCost - totalDeliveryCost).toFixed(2));
       const profitMarginPercent = totalRevenue > 0 ? Number(((netProfit / totalRevenue) * 100).toFixed(1)) : 0;
 
-      // Delivery window constraint: 11:30 - 12:30 (Max 60 minutes)
       const isLate = roundedMinutes > 60;
 
       riderRoutes.push({
@@ -225,9 +236,8 @@ export class RouteOptimizerService {
       });
     }
 
-    // Overall system summary
-    const totalOrders = orders.length;
-    const totalBoxes = orders.reduce((sum, o) => sum + o.boxCount, 0);
+    const totalOrders = deliverableItems.length;
+    const totalBoxes = deliverableItems.reduce((sum, item) => sum + item.order.boxCount, 0);
     const assignedRidersCount = riderRoutes.length;
     const totalDistanceKm = Number(riderRoutes.reduce((sum, r) => sum + r.totalDistanceKm, 0).toFixed(2));
     const totalDeliveryCost = Number(riderRoutes.reduce((sum, r) => sum + r.totalDeliveryCost, 0).toFixed(2));
@@ -251,7 +261,8 @@ export class RouteOptimizerService {
         netProfit,
         profitMarginPercent,
         onTimeDeliveryRate,
-        allOnTime: onTimeRoutes === riderRoutes.length
+        allOnTime: onTimeRoutes === riderRoutes.length,
+        outOfRangeOrders
       },
       shopLocation: shop
     };

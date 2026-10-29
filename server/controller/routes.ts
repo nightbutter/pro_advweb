@@ -1,6 +1,7 @@
 import express from 'express';
 import { query, transaction, SHOP_LOCATION } from '../dbconnect';
-import { RouteOptimizerService } from '../services/route-optimizer';
+import { RouteOptimizerService, routePoints } from '../services/route-optimizer';
+import { getRoadDistanceMatrix } from '../services/road-distance';
 import { Order } from '../model/order';
 import { Rider } from '../model/rider';
 import { requireRole, canAccessRider, sendServerError } from '../jwtauth';
@@ -8,7 +9,13 @@ import { requireRole, canAccessRider, sendServerError } from '../jwtauth';
 export const router = express.Router();
 const optimizer = new RouteOptimizerService();
 
-// State caching the latest plan
+async function buildPlan(orders: Order[], riders: Rider[], seed: number) {
+  const { matrix, source } = await getRoadDistanceMatrix(routePoints(orders, SHOP_LOCATION));
+  const plan = optimizer.optimize(orders, riders, SHOP_LOCATION, seed, matrix);
+  plan.summary.distanceSource = source;
+  return plan;
+}
+
 let latestPlan: any = null;
 
 const ORDER_WITH_CUSTOMER = `
@@ -36,17 +43,23 @@ async function loadOrdersAndRiders(): Promise<{ orders: Order[]; riders: Rider[]
   return { orders, riders };
 }
 
-// POST /api/routes/optimize - Run or re-calculate route optimization
 router.post('/optimize', requireRole('admin'), async (req, res) => {
   try {
     const seed = Number(req.body?.seed) || 0;
     const { orders, riders } = await loadOrdersAndRiders();
 
-    const plan = optimizer.optimize(orders, riders, SHOP_LOCATION, seed);
+    const plan = await buildPlan(orders, riders, seed);
     latestPlan = plan;
 
-    // Persist assignments back to orders table
     await transaction(async (client) => {
+      const outsideIds = plan.summary.outOfRangeOrders?.map(order => order.orderId).filter((id): id is number => id !== undefined) ?? [];
+      if (outsideIds.length) {
+        await client.query(
+          `UPDATE orders SET "assignedRiderId" = NULL, "deliverySequence" = NULL, status = 'pending'
+           WHERE id = ANY($1::int[])`,
+          [outsideIds]
+        );
+      }
       for (const route of plan.routes) {
         for (const ord of route.orders) {
           await client.query(
@@ -65,13 +78,11 @@ router.post('/optimize', requireRole('admin'), async (req, res) => {
   }
 });
 
-// GET /api/routes/current - Get current optimized plan
 router.get('/current', requireRole('admin'), async (req, res) => {
   try {
     if (!latestPlan) {
-      // Generate initial plan automatically if not generated yet
       const { orders, riders } = await loadOrdersAndRiders();
-      latestPlan = optimizer.optimize(orders, riders, SHOP_LOCATION, 0);
+      latestPlan = await buildPlan(orders, riders, 0);
     }
     res.json(latestPlan);
   } catch (error) {
@@ -79,7 +90,6 @@ router.get('/current', requireRole('admin'), async (req, res) => {
   }
 });
 
-// GET /api/routes/rider/:jobCodeOrId - Rider view specific route by ID or job code
 router.get('/rider/:jobCodeOrId', async (req, res) => {
   try {
     const param = req.params.jobCodeOrId.trim();
@@ -101,9 +111,8 @@ router.get('/rider/:jobCodeOrId', async (req, res) => {
     }
 
     if (!latestPlan) {
-      // Initialize if needed
       const { orders, riders } = await loadOrdersAndRiders();
-      latestPlan = optimizer.optimize(orders, riders, SHOP_LOCATION, 0);
+      latestPlan = await buildPlan(orders, riders, 0);
     }
 
     const route = latestPlan.routes.find((r: any) => r.riderId === riderId);

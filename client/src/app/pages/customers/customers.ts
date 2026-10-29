@@ -1,12 +1,14 @@
 import { Component, OnInit, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { LucideAngularModule } from 'lucide-angular';
 import * as L from 'leaflet';
 import { CustomerApi } from '../../services/api/customer-api';
 import { Customer } from '../../model/customer';
 import { ZONES } from '../../model/zone';
 import { APP_ICONS, escapeHtml, iconSvg } from '../../shared/icons';
+import { MAX_DELIVERY_RADIUS_KM, SHOP_LOCATION, distanceFromShopKm } from '../../shared/delivery-area';
 
 @Component({
   selector: 'app-customers',
@@ -22,7 +24,10 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
   
   readonly zones = ZONES;
   readonly icons = APP_ICONS;
+  readonly maxRadiusKm = MAX_DELIVERY_RADIUS_KM;
   isModalOpen = false;
+  saving = false;
+  formError = '';
   editMode = false;
   formCustomer: Customer = {
     name: '',
@@ -37,6 +42,14 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
   private tempMarker?: L.Marker;
 
   private customerApi = inject(CustomerApi);
+
+  get formDistanceKm(): number {
+    return distanceFromShopKm(Number(this.formCustomer.lat), Number(this.formCustomer.lng));
+  }
+
+  get formOutsideArea(): boolean {
+    return this.formDistanceKm > MAX_DELIVERY_RADIUS_KM;
+  }
 
   ngOnInit() {
     this.loadCustomers();
@@ -72,9 +85,18 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
+    L.circle([SHOP_LOCATION.lat, SHOP_LOCATION.lng], {
+      radius: MAX_DELIVERY_RADIUS_KM * 1000,
+      color: '#e2580e',
+      weight: 2,
+      dashArray: '6 6',
+      fillColor: '#e2580e',
+      fillOpacity: 0.04,
+      interactive: false
+    }).addTo(this.map);
+
     this.markersLayer.addTo(this.map);
 
-    // Shop Marker
     const shopIcon = L.divIcon({
       html: iconSvg(APP_ICONS.store, 18, '#fff'),
       className: 'custom-shop-marker',
@@ -85,7 +107,6 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
       .addTo(this.map)
       .bindPopup('<div class="map-popup-title">ร้านข้าวกล่องเดลิเวอรี่</div><div class="map-popup-row">จุดเริ่มต้นส่ง 11:30 น.</div>');
 
-    // Map click listener for adding/updating coordinates
     this.map.on('click', (e: L.LeafletMouseEvent) => {
       if (this.isModalOpen) {
         this.formCustomer.lat = Number(e.latlng.lat.toFixed(6));
@@ -142,6 +163,7 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
       lng: 103.2505,
       zone: 'ขามเรียง'
     };
+    this.formError = '';
     this.isModalOpen = true;
     this.updateTempMarker(this.formCustomer.lat, this.formCustomer.lng);
   }
@@ -149,6 +171,7 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
   editCustomer(c: Customer) {
     this.editMode = true;
     this.formCustomer = { ...c };
+    this.formError = '';
     this.isModalOpen = true;
     this.updateTempMarker(c.lat, c.lng);
   }
@@ -182,13 +205,26 @@ export class Customers implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async saveCustomer() {
-    if (this.editMode && this.formCustomer.id) {
-      await this.customerApi.updateCustomer(this.formCustomer.id, this.formCustomer);
-    } else {
-      await this.customerApi.createCustomer(this.formCustomer);
+    if (this.formOutsideArea) {
+      this.formError = `หมุดอยู่ห่างร้าน ${this.formDistanceKm.toFixed(2)} กม. เกินพื้นที่จัดส่ง ${MAX_DELIVERY_RADIUS_KM} กม.`;
+      return;
     }
-    this.closeModal();
-    await this.loadCustomers();
+    this.formError = '';
+    this.saving = true;
+    try {
+      if (this.editMode && this.formCustomer.id) {
+        await this.customerApi.updateCustomer(this.formCustomer.id, this.formCustomer);
+      } else {
+        await this.customerApi.createCustomer(this.formCustomer);
+      }
+      this.closeModal();
+      await this.loadCustomers();
+    } catch (err) {
+      this.formError =
+        (err instanceof HttpErrorResponse && err.error?.error) || 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
+    } finally {
+      this.saving = false;
+    }
   }
 
   async deleteCustomer(c: Customer) {

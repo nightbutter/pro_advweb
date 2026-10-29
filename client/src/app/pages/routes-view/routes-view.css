@@ -10,7 +10,6 @@
   }
 }
 
-/* ---------- สรุปตัวเลข ---------- */
 .summary {
   display: grid;
   grid-template-columns: 1.35fr repeat(4, 1fr);
@@ -84,7 +83,6 @@
   font-size: 20px;
 }
 
-/* ---------- แผนที่ + รายการไรเดอร์ ---------- */
 .main-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 400px;
@@ -235,7 +233,6 @@
   font-weight: 600;
 }
 
-/* ลำดับจุดส่งแบบเส้นเวลา */
 .rc-stops {
   list-style: none;
   position: relative;
@@ -319,4 +316,13 @@
   .rc-metrics {
     grid-template-columns: repeat(2, auto);
   }
+}
+
+.out-of-range {
+  margin-bottom: 18px;
+}
+.out-of-range ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
 }

@@ -60,12 +60,20 @@ export interface RouteOptimizationResult {
     profitMarginPercent: number;
     onTimeDeliveryRate: number;
     allOnTime: boolean;
+    distanceSource?: 'road' | 'straight';
+    outOfRangeOrders?: OutOfRangeOrder[];
   };
   shopLocation: ShopLocation;
 }
 
-/** ผลลัพธ์ของ GET /api/routes/rider/:jobCodeOrId */
 export interface RiderRouteResponse {
   shopLocation: ShopLocation;
   route: RiderRoute;
+}
+
+export interface OutOfRangeOrder {
+  orderId?: number;
+  orderNumber?: string;
+  customerName?: string;
+  distanceKm: number;
 }

@@ -15,7 +15,6 @@
     </div>
   </div>
 
-  <!-- สรุปการเงินและเวลา -->
   <div class="summary" *ngIf="planResult?.summary as s">
     <div class="profit-hero" [class.loss]="s.netProfit < 0">
       <div class="hero-label">
@@ -45,7 +44,9 @@
       <div>
         <div class="stat-label">ค่าส่งไรเดอร์</div>
         <div class="stat-value">{{ s.totalDeliveryCost | number: '1.2-2' }} ฿</div>
-        <div class="stat-sub">ระยะทางรวม {{ s.totalDistanceKm }} กม.</div>
+        <div class="stat-sub">
+          {{ s.distanceSource === 'straight' ? 'ระยะเส้นตรง (สำรอง)' : 'ระยะตามถนน' }} {{ s.totalDistanceKm }} กม.
+        </div>
       </div>
     </div>
     <div class="stat">
@@ -53,7 +54,7 @@
       <div>
         <div class="stat-label">ต้นทุนอาหาร</div>
         <div class="stat-value">{{ s.totalFoodCost | number: '1.0-0' }} ฿</div>
-        <div class="stat-sub">{{ s.totalOrders }} ออเดอร์ × 40 ฿/กล่อง</div>
+        <div class="stat-sub">{{ s.totalBoxes }} กล่อง × 40 ฿</div>
       </div>
     </div>
     <div class="stat" [class.late]="!s.allOnTime">
@@ -70,8 +71,19 @@
     </div>
   </div>
 
+  <div class="alert alert-warning out-of-range" *ngIf="outOfRangeOrders.length" role="alert">
+    <lucide-icon [img]="icons.warning" [size]="18"></lucide-icon>
+    <div>
+      <strong>มี {{ outOfRangeOrders.length }} ออเดอร์อยู่นอกพื้นที่จัดส่ง {{ maxRadiusKm }} กม. จึงไม่ได้จัดให้ไรเดอร์</strong>
+      <ul>
+        <li *ngFor="let o of outOfRangeOrders">
+          {{ o.orderNumber }} · {{ o.customerName }} · ห่างร้าน {{ o.distanceKm | number: '1.2-2' }} กม.
+        </li>
+      </ul>
+    </div>
+  </div>
+
   <div class="main-layout">
-    <!-- แผนที่ -->
     <div class="card map-card">
       <div class="card-header">
         <h3 class="card-title">
@@ -90,7 +102,6 @@
       </p>
     </div>
 
-    <!-- รายการใบงานไรเดอร์ -->
     <aside class="riders-panel">
       <div class="panel-head">
         <h3 class="card-title">

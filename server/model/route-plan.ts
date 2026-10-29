@@ -21,8 +21,8 @@ export interface RiderRoute {
   riderName: string;
   riderPhone: string;
   color: string;
-  zone: Zone; // delivery zone this route covers
-  jobCode: string; // e.g. "RD-01" or date based
+  zone: Zone;
+  jobCode: string;
   totalBoxes: number;
   orderCount: number;
   orders: Order[];
@@ -30,12 +30,12 @@ export interface RiderRoute {
   totalDistanceKm: number;
   estimatedDurationMinutes: number;
   estimatedFinishTime: string;
-  baseDeliveryFee: number; // 15 baht
-  distanceBoxFee: number; // 2 baht * distance * boxes
-  totalDeliveryCost: number; // base + distanceBoxFee
-  totalRevenue: number; // 65 * totalBoxes
-  totalFoodCost: number; // 40 * totalBoxes
-  netProfit: number; // Revenue - FoodCost - DeliveryCost
+  baseDeliveryFee: number;
+  distanceBoxFee: number;
+  totalDeliveryCost: number;
+  totalRevenue: number;
+  totalFoodCost: number;
+  netProfit: number;
   profitMarginPercent: number;
   isLate: boolean;
 }
@@ -52,12 +52,21 @@ export interface RouteOptimizationResult {
     totalFoodCost: number;
     netProfit: number;
     profitMarginPercent: number;
-    onTimeDeliveryRate: number; // percentage <= 12:30
+    onTimeDeliveryRate: number;
     allOnTime: boolean;
+    distanceSource?: 'road' | 'straight';
+    outOfRangeOrders?: OutOfRangeOrder[];
   };
   shopLocation: {
     lat: number;
     lng: number;
     name: string;
   };
+}
+
+export interface OutOfRangeOrder {
+  orderId?: number;
+  orderNumber?: string;
+  customerName?: string;
+  distanceKm: number;
 }

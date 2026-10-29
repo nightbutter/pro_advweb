@@ -16,7 +16,6 @@
   </div>
 
   <div class="content-grid">
-    <!-- ตารางรายชื่อลูกค้า -->
     <div class="card table-card">
       <div class="card-header">
         <h3 class="card-title">
@@ -83,7 +82,6 @@
       </div>
     </div>
 
-    <!-- แผนที่ -->
     <div class="card map-card">
       <div class="card-header">
         <h3 class="card-title">
@@ -100,7 +98,6 @@
     </div>
   </div>
 
-  <!-- หน้าต่างเพิ่ม / แก้ไขลูกค้า -->
   <div class="modal-backdrop side" *ngIf="isModalOpen">
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -143,11 +140,19 @@
         </div>
         <p class="field-hint">
           <lucide-icon [img]="icons.locate" [size]="14"></lucide-icon>
-          คลิกบนแผนที่เพื่อปักหมุดได้เลย ไม่ต้องพิมพ์พิกัดเอง
+          คลิกบนแผนที่เพื่อปักหมุดได้เลย ไม่ต้องพิมพ์พิกัดเอง (ต้องอยู่ในวงประ {{ maxRadiusKm }} กม.)
         </p>
+        <p class="field-hint" [class.text-bad]="formOutsideArea">
+          <lucide-icon [img]="formOutsideArea ? icons.warning : icons.route" [size]="14"></lucide-icon>
+          ห่างร้าน {{ formDistanceKm | number: '1.2-2' }} กม.{{ formOutsideArea ? ' · นอกพื้นที่จัดส่ง' : '' }}
+        </p>
+        <div class="alert alert-error" *ngIf="formError" role="alert">
+          <lucide-icon [img]="icons.alert" [size]="17"></lucide-icon>
+          <span>{{ formError }}</span>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" (click)="closeModal()">ยกเลิก</button>
-          <button type="submit" class="btn btn-primary">{{ editMode ? 'บันทึกการแก้ไข' : 'บันทึกลูกค้า' }}</button>
+          <button type="submit" class="btn btn-primary" [disabled]="saving || formOutsideArea">{{ editMode ? 'บันทึกการแก้ไข' : 'บันทึกลูกค้า' }}</button>
         </div>
       </form>
     </div>

@@ -1,7 +1,3 @@
-/**
- * CRUD + API integration tests for /api/customers against a disposable
- * embedded Postgres with the real seeded app (admin JWT required).
- */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { bootPg, createDb, connectDb, shutdownPg, startApp, req, login } from './helpers';
@@ -15,7 +11,7 @@ let admin: string;
 before(async () => {
   const booted = await bootPg(TAG, 56120);
   const url = await createDb(booted, 'apicust_t');
-  base = await startApp(url, 3310); // seeds 13 riders / 60 customers / 30 orders / 14 users
+  base = await startApp(url, 3310);
   admin = await login(base, 'admin', 'admin1234');
   db = await connectDb(url);
 });
@@ -23,7 +19,7 @@ before(async () => {
 after(async () => {
   await db.end();
   await shutdownPg(TAG);
-  process.exit(0); // app server + pool keep handles open; subprocess must exit
+  process.exit(0);
 });
 
 test('GET /customers returns seeded list, id DESC', async () => {
@@ -82,13 +78,13 @@ test('POST /customers missing field -> 400', async () => {
 });
 
 test('PUT /customers/:id full body -> 200 updated', async () => {
-  const created = (await req(base, 'POST', '/customers', { name: 'A', phone: 'P', address: 'Addr', lat: 16.2, lng: 103.2 }, admin)).body;
+  const created = (await req(base, 'POST', '/customers', { name: 'A', phone: 'P', address: 'Addr', lat: 16.25, lng: 103.25 }, admin)).body;
   const { status, body } = await req(base, 'PUT', `/customers/${created.id}`, {
-    name: 'A2', phone: 'P2', address: 'Addr2', lat: 16.3, lng: 103.3
+    name: 'A2', phone: 'P2', address: 'Addr2', lat: 16.255, lng: 103.255
   }, admin);
   assert.equal(status, 200);
   assert.equal(body.name, 'A2');
-  assert.equal(body.lat, 16.3);
+  assert.equal(body.lat, 16.255);
 });
 
 test('PUT /customers/:id nonexistent -> 404', async () => {
@@ -99,7 +95,7 @@ test('PUT /customers/:id nonexistent -> 404', async () => {
 });
 
 test('PUT /customers/:id partial body -> 400, row unchanged', async () => {
-  const created = (await req(base, 'POST', '/customers', { name: 'B', phone: 'P', address: 'Addr', lat: 16.2, lng: 103.2 }, admin)).body;
+  const created = (await req(base, 'POST', '/customers', { name: 'B', phone: 'P', address: 'Addr', lat: 16.25, lng: 103.25 }, admin)).body;
   const { status } = await req(base, 'PUT', `/customers/${created.id}`, { name: 'only-name' }, admin);
   assert.equal(status, 400);
   const row = (await db.query('SELECT * FROM customers WHERE id=$1', [created.id])).rows[0];
@@ -107,18 +103,18 @@ test('PUT /customers/:id partial body -> 400, row unchanged', async () => {
 });
 
 test('PUT /customers/:id validation matrix -> 400 without touching the row', async () => {
-  const created = (await req(base, 'POST', '/customers', { name: 'M', phone: 'P', address: 'Addr', lat: 16.2, lng: 103.2 }, admin)).body;
+  const created = (await req(base, 'POST', '/customers', { name: 'M', phone: 'P', address: 'Addr', lat: 16.25, lng: 103.25 }, admin)).body;
   const bad = [
-    {},                                                    // empty body
-    { phone: 'p', address: 'a', lat: 1, lng: 2 },          // missing name
-    { name: 'n', address: 'a', lat: 1, lng: 2 },           // missing phone
-    { name: 'n', phone: 'p', lat: 1, lng: 2 },             // missing address
-    { name: 'n', phone: 'p', address: 'a', lng: 2 },       // missing lat
-    { name: 'n', phone: 'p', address: 'a', lat: 1 },       // missing lng
-    { name: null, phone: 'p', address: 'a', lat: 1, lng: 2 },          // null
-    { name: '', phone: 'p', address: 'a', lat: 1, lng: 2 },            // empty string
-    { name: 'n', phone: 'p', address: 'a', lat: 'abc', lng: 2 },       // wrong type
-    { name: 'n', phone: 'p', address: 'a', lat: 1, lng: 'x' },         // wrong type
+    {},
+    { phone: 'p', address: 'a', lat: 1, lng: 2 },
+    { name: 'n', address: 'a', lat: 1, lng: 2 },
+    { name: 'n', phone: 'p', lat: 1, lng: 2 },
+    { name: 'n', phone: 'p', address: 'a', lng: 2 },
+    { name: 'n', phone: 'p', address: 'a', lat: 1 },
+    { name: null, phone: 'p', address: 'a', lat: 1, lng: 2 },
+    { name: '', phone: 'p', address: 'a', lat: 1, lng: 2 },
+    { name: 'n', phone: 'p', address: 'a', lat: 'abc', lng: 2 },
+    { name: 'n', phone: 'p', address: 'a', lat: 1, lng: 'x' },
   ];
   for (const [i, body] of bad.entries()) {
     const { status } = await req(base, 'PUT', `/customers/${created.id}`, body, admin);
@@ -129,7 +125,7 @@ test('PUT /customers/:id validation matrix -> 400 without touching the row', asy
 });
 
 test('DELETE /customers/:id without orders -> 200', async () => {
-  const created = (await req(base, 'POST', '/customers', { name: 'C', phone: 'P', address: 'Addr', lat: 16.2, lng: 103.2 }, admin)).body;
+  const created = (await req(base, 'POST', '/customers', { name: 'C', phone: 'P', address: 'Addr', lat: 16.25, lng: 103.25 }, admin)).body;
   const { status, body } = await req(base, 'DELETE', `/customers/${created.id}`, undefined, admin);
   assert.equal(status, 200);
   assert.equal(body.success, true);
@@ -137,7 +133,7 @@ test('DELETE /customers/:id without orders -> 200', async () => {
 });
 
 test('DELETE /customers/:id with orders -> cascade removes orders', async () => {
-  const cust = (await req(base, 'POST', '/customers', { name: 'D', phone: 'P', address: 'Addr', lat: 16.2, lng: 103.2 }, admin)).body;
+  const cust = (await req(base, 'POST', '/customers', { name: 'D', phone: 'P', address: 'Addr', lat: 16.25, lng: 103.25 }, admin)).body;
   const ord = (await req(base, 'POST', '/orders', { customerId: cust.id, boxCount: 2 }, admin)).body;
   const { status } = await req(base, 'DELETE', `/customers/${cust.id}`, undefined, admin);
   assert.equal(status, 200);
@@ -146,7 +142,7 @@ test('DELETE /customers/:id with orders -> cascade removes orders', async () => 
 });
 
 test('DELETE /customers/:id twice -> second is 404', async () => {
-  const cust = (await req(base, 'POST', '/customers', { name: 'E', phone: 'P', address: 'Addr', lat: 16.2, lng: 103.2 }, admin)).body;
+  const cust = (await req(base, 'POST', '/customers', { name: 'E', phone: 'P', address: 'Addr', lat: 16.25, lng: 103.25 }, admin)).body;
   await req(base, 'DELETE', `/customers/${cust.id}`, undefined, admin);
   const { status } = await req(base, 'DELETE', `/customers/${cust.id}`, undefined, admin);
   assert.equal(status, 404);

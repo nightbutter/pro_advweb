@@ -1,12 +1,14 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { LucideAngularModule } from 'lucide-angular';
 import { CustomerApi } from '../../services/api/customer-api';
 import { OrderApi } from '../../services/api/order-api';
 import { Customer } from '../../model/customer';
 import { Order } from '../../model/order';
 import { APP_ICONS } from '../../shared/icons';
+import { MAX_DELIVERY_RADIUS_KM, isWithinDeliveryArea } from '../../shared/delivery-area';
 
 @Component({
   selector: 'app-orders',
@@ -31,6 +33,13 @@ export class Orders implements OnInit {
   selectedCustomerId: number | null = null;
   formBoxCount: number = 1;
   readonly boxOptions = [1, 2, 3];
+  readonly maxRadiusKm = MAX_DELIVERY_RADIUS_KM;
+  formError = '';
+  pageError = '';
+
+  inDeliveryArea(c: Customer): boolean {
+    return isWithinDeliveryArea(c.lat, c.lng);
+  }
 
   ngOnInit() {
     this.loadOrders();
@@ -69,7 +78,8 @@ export class Orders implements OnInit {
 
   openAddModal() {
     this.editMode = false;
-    this.selectedCustomerId = this.customers.length > 0 ? this.customers[0].id! : null;
+    this.selectedCustomerId = this.customers.find(c => this.inDeliveryArea(c))?.id ?? null;
+    this.formError = '';
     this.formBoxCount = 1;
     this.isModalOpen = true;
   }
@@ -79,6 +89,7 @@ export class Orders implements OnInit {
     this.editingOrderId = order.id;
     this.selectedCustomerId = order.customerId;
     this.formBoxCount = order.boxCount;
+    this.formError = '';
     this.isModalOpen = true;
   }
 
@@ -88,21 +99,24 @@ export class Orders implements OnInit {
   }
 
   async saveOrder() {
-    if (this.editMode && this.editingOrderId) {
-      await this.orderApi.updateOrder(this.editingOrderId, {
-        boxCount: this.formBoxCount,
-        customerId: this.selectedCustomerId || undefined,
-      });
-    } else if (this.selectedCustomerId) {
-      await this.orderApi.createOrder({
-        customerId: this.selectedCustomerId,
-        boxCount: this.formBoxCount,
-      });
-    } else {
-      return;
+    this.formError = '';
+    try {
+      if (this.editMode && this.editingOrderId) {
+        await this.orderApi.updateOrder(this.editingOrderId, { boxCount: this.formBoxCount });
+      } else if (this.selectedCustomerId) {
+        await this.orderApi.createOrder({
+          customerId: this.selectedCustomerId,
+          boxCount: this.formBoxCount,
+        });
+      } else {
+        this.formError = 'กรุณาเลือกลูกค้าที่อยู่ในพื้นที่จัดส่ง';
+        return;
+      }
+      this.closeModal();
+      await this.loadOrders();
+    } catch (err) {
+      this.formError = (err instanceof HttpErrorResponse && err.error?.error) || 'บันทึกออเดอร์ไม่สำเร็จ';
     }
-    this.closeModal();
-    await this.loadOrders();
   }
 
   async deleteOrder(order: Order) {
@@ -114,9 +128,12 @@ export class Orders implements OnInit {
 
   async simulateOrders(count?: number) {
     this.simulating = true;
+    this.pageError = '';
     try {
       await this.orderApi.simulateOrders(count);
       await this.loadOrders();
+    } catch (err) {
+      this.pageError = (err instanceof HttpErrorResponse && err.error?.error) || 'จำลองออเดอร์ไม่สำเร็จ';
     } finally {
       this.simulating = false;
     }
